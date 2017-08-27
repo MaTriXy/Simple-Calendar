@@ -1,11 +1,15 @@
 package com.simplemobiletools.calendar.activities
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.provider.CalendarContract
 import android.support.v4.app.ActivityCompat
 import android.support.v4.view.ViewPager
 import android.util.SparseIntArray
@@ -45,6 +49,7 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 class MainActivity : SimpleActivity(), NavigationListener {
+    private val CALDAV_SYNC_DELAY = 2000L
     private val PREFILLED_MONTHS = 97
     private val PREFILLED_YEARS = 31
     private val PREFILLED_WEEKS = 61
@@ -59,6 +64,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
     private var mStoredIsSundayFirst = false
     private var mStoredUse24HourFormat = false
     private var mShouldFilterBeVisible = false
+    private var mCalDAVSyncHandler = Handler()
 
     private var mDefaultWeeklyPage = 0
     private var mDefaultMonthlyPage = 0
@@ -83,6 +89,12 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }
         storeStateVariables()
         updateViewPager()
+
+        if (!hasCalendarPermission()) {
+            config.caldavSync = false
+        }
+
+        recheckCalDAVCalendars {}
     }
 
     override fun onResume() {
@@ -120,10 +132,17 @@ class MainActivity : SimpleActivity(), NavigationListener {
         mStoredUse24HourFormat = config.use24hourFormat
     }
 
+    override fun onStop() {
+        super.onStop()
+        mCalDAVSyncHandler.removeCallbacksAndMessages(null)
+        contentResolver.unregisterContentObserver(calDAVSyncObserver)
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
         menu.findItem(R.id.filter).isVisible = mShouldFilterBeVisible
         menu.findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible()
+        menu.findItem(R.id.refresh_caldav_calendars).isVisible = config.caldavSync
         return true
     }
 
@@ -132,6 +151,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
             R.id.change_view -> showViewDialog()
             R.id.go_to_today -> goToToday()
             R.id.filter -> showFilterDialog()
+            R.id.refresh_caldav_calendars -> refreshCalDAVCalendars()
             R.id.add_holidays -> addHolidays()
             R.id.import_events -> tryImportEvents()
             R.id.export_events -> tryExportEvents()
@@ -187,21 +207,43 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }
     }
 
-    private fun shouldGoToTodayBeVisible(): Boolean {
-        return if (config.storedView == WEEKLY_VIEW) {
-            week_view_view_pager.currentItem != mDefaultWeeklyPage
-        } else if (config.storedView == MONTHLY_VIEW) {
-            main_view_pager.currentItem != mDefaultMonthlyPage
-        } else if (config.storedView == YEARLY_VIEW) {
-            main_view_pager.currentItem != mDefaultYearlyPage
-        } else {
-            false
-        }
+    private fun shouldGoToTodayBeVisible() = when {
+        config.storedView == WEEKLY_VIEW -> week_view_view_pager.currentItem != mDefaultWeeklyPage
+        config.storedView == MONTHLY_VIEW -> main_view_pager.currentItem != mDefaultMonthlyPage
+        config.storedView == YEARLY_VIEW -> main_view_pager.currentItem != mDefaultYearlyPage
+        else -> false
     }
 
     private fun showFilterDialog() {
         FilterEventTypesDialog(this) {
             refreshViewPager()
+        }
+    }
+
+    private fun refreshCalDAVCalendars() {
+        toast(R.string.refreshing)
+        val uri = CalendarContract.Calendars.CONTENT_URI
+        contentResolver.registerContentObserver(uri, false, calDAVSyncObserver)
+        Bundle().apply {
+            putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true)
+            putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
+            ContentResolver.requestSync(null, uri.authority, this)
+        }
+        scheduleCalDAVSync(true)
+    }
+
+    private val calDAVSyncObserver = object : ContentObserver(Handler()) {
+        override fun onChange(selfChange: Boolean) {
+            super.onChange(selfChange)
+            if (!selfChange) {
+                mCalDAVSyncHandler.removeCallbacksAndMessages(null)
+                mCalDAVSyncHandler.postDelayed({
+                    recheckCalDAVCalendars {
+                        refreshViewPager()
+                        toast(R.string.refreshing_complete)
+                    }
+                }, CALDAV_SYNC_DELAY)
+            }
         }
     }
 
@@ -239,14 +281,11 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun updateViewPager() {
         resetTitle()
-        if (config.storedView == YEARLY_VIEW) {
-            fillYearlyViewPager()
-        } else if (config.storedView == EVENTS_LIST_VIEW) {
-            fillEventsList()
-        } else if (config.storedView == WEEKLY_VIEW) {
-            fillWeeklyViewPager()
-        } else {
-            openMonthlyToday()
+        when {
+            config.storedView == YEARLY_VIEW -> fillYearlyViewPager()
+            config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
+            config.storedView == WEEKLY_VIEW -> fillWeeklyViewPager()
+            else -> openMonthlyToday()
         }
 
         mWeekScrollY = 0
@@ -258,14 +297,11 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun refreshViewPager() {
-        if (config.storedView == YEARLY_VIEW) {
-            (main_view_pager.adapter as MyYearPagerAdapter).refreshEvents(main_view_pager.currentItem)
-        } else if (config.storedView == EVENTS_LIST_VIEW) {
-            fillEventsList()
-        } else if (config.storedView == WEEKLY_VIEW) {
-            (week_view_view_pager.adapter as MyWeekPagerAdapter).refreshEvents(week_view_view_pager.currentItem)
-        } else {
-            (main_view_pager.adapter as MyMonthPagerAdapter).refreshEvents(main_view_pager.currentItem)
+        when {
+            config.storedView == YEARLY_VIEW -> (main_view_pager.adapter as MyYearPagerAdapter).refreshEvents(main_view_pager.currentItem)
+            config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
+            config.storedView == WEEKLY_VIEW -> (week_view_view_pager.adapter as MyWeekPagerAdapter).refreshEvents(week_view_view_pager.currentItem)
+            else -> (main_view_pager.adapter as MyMonthPagerAdapter).refreshEvents(main_view_pager.currentItem)
         }
     }
 
@@ -284,21 +320,21 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun tryImportEventsFromFile(uri: Uri) {
-        if (uri.scheme == "file") {
-            importEventsDialog(uri.path)
-        } else if (uri.scheme == "content") {
-            val tempFile = getTempFile()
-            if (tempFile == null) {
-                toast(R.string.unknown_error_occurred)
-                return
-            }
+        when {
+            uri.scheme == "file" -> importEventsDialog(uri.path)
+            uri.scheme == "content" -> {
+                val tempFile = getTempFile()
+                if (tempFile == null) {
+                    toast(R.string.unknown_error_occurred)
+                    return
+                }
 
-            val inputStream = contentResolver.openInputStream(uri)
-            val out = FileOutputStream(tempFile)
-            inputStream.copyTo(out)
-            importEventsDialog(tempFile.absolutePath)
-        } else {
-            toast(R.string.invalid_file_format)
+                val inputStream = contentResolver.openInputStream(uri)
+                val out = FileOutputStream(tempFile)
+                inputStream.copyTo(out)
+                importEventsDialog(tempFile.absolutePath)
+            }
+            else -> toast(R.string.invalid_file_format)
         }
     }
 
@@ -553,6 +589,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
         LinkedHashMap<String, String>().apply {
             put("Algeria", "algeria.ics")
+            put("Argentina", "argentina.ics")
             put("België", "belgium.ics")
             put("Bolivia", "bolivia.ics")
             put("Brasil", "brazil.ics")
@@ -570,12 +607,13 @@ class MainActivity : SimpleActivity(), NavigationListener {
             put("Italia", "italy.ics")
             put("Magyarország", "hungary.ics")
             put("Nederland", "netherlands.ics")
-            put("Nihon", "japan.ics")
+            put("日本", "japan.ics")
             put("Norge", "norway.ics")
+            put("Österreich", "austria.ics")
             put("Pākistān", "pakistan.ics")
             put("Polska", "poland.ics")
             put("Portugal", "portugal.ics")
-            put("Rossiya", "russia.ics")
+            put("Россия", "russia.ics")
             put("Schweiz", "switzerland.ics")
             put("Slovenija", "slovenia.ics")
             put("Slovensko", "slovakia.ics")
@@ -616,6 +654,8 @@ class MainActivity : SimpleActivity(), NavigationListener {
             add(Release(76, R.string.release_76))
             add(Release(77, R.string.release_77))
             add(Release(80, R.string.release_80))
+            add(Release(84, R.string.release_84))
+            add(Release(86, R.string.release_86))
             checkWhatsNew(this, BuildConfig.VERSION_CODE)
         }
     }

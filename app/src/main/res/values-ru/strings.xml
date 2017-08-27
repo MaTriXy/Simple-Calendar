@@ -156,6 +156,7 @@
     <string name="export_past_events_too">Экспортировать прошедшие события</string>
     <string name="include_event_types">Включать типы событий</string>
     <string name="filename_without_ics">Имя файла (без .ics)</string>
+    <string name="no_title">No title</string>
 
     <!-- Event details -->
     <string name="title">Заголовок</string>
@@ -176,6 +177,7 @@
     <string name="select_event_type">Выбрать тип события</string>
     <string name="move_events_into_default">Move affected events into the default event type</string>
     <string name="remove_affected_events">Permanently remove affected events</string>
+    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
 
     <!-- Holidays -->
     <string name="holidays">Праздники</string>
@@ -199,17 +201,28 @@
     <string name="no_ringtone_picker">Не найдено приложение для выбора рингтона</string>
     <string name="no_ringtone_selected">Нет</string>
     <string name="day_end_before_start">Конец дня не может быть раньше начала</string>
-    <string name="google_sync">Синхронизация с Google</string>
+    <string name="caldav_sync">CalDAV sync</string>
     <string name="display_past_events">Показывать прошедшие события</string>
     <string name="snooze_delay">Postpone reminder with Snooze by</string>
+    <string name="widgets">Widgets</string>
 
-    <plurals name="minutes">
+    <!-- CalDAV sync -->
+    <string name="caldav">CalDAV</string>
+    <string name="select_caldav_calendars">Select calendars to sync</string>
+    <string name="manage_synced_calendars">Manage synced calendars</string>
+    <string name="store_locally_only">Store locally only</string>
+    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="refreshing_complete">Refreshing complete</string>
+    <string name="editing_calendar_failed">Editing calendar failed</string>
+
+    <plurals name="by_minutes">
         <item quantity="one">%1$d минута</item>
         <item quantity="few">%1$d минуты</item>
         <item quantity="many">%1$d минут</item>
     </plurals>
 
-    <plurals name="hours">
+    <plurals name="by_hours">
         <item quantity="one">%1$d час</item>
         <item quantity="few">%1$d часа</item>
         <item quantity="many">%1$d часов</item>
@@ -277,6 +290,8 @@
         Это приложение не показывает рекламу и не запрашивает лишние разрешения. У него полностью открытый исходный код и настраиваемые цвета оформления.
 
         Разрешение для доступа к памяти требуется только для экспорта или импорта событий из файлов .ics.
+
+        Internet and Contacts permissions are used only at Google sync.
 
         Это приложение является лишь частью более крупной серии приложений. Вы можете найти остальные на http://www.simplemobiletools.com
     </string>

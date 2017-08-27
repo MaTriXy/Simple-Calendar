@@ -1,6 +1,7 @@
 package com.simplemobiletools.calendar.views
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.util.AttributeSet
@@ -20,6 +21,7 @@ class SmallMonthView(context: Context, attrs: AttributeSet, defStyle: Int) : Vie
     var mDays = 31
     var mFirstDay = 0
     var mTodaysId = 0
+    var mIsLandscape = false
 
     var mEvents: ArrayList<Int>? = null
 
@@ -61,28 +63,34 @@ class SmallMonthView(context: Context, attrs: AttributeSet, defStyle: Int) : Vie
 
         mPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = mTextColor
-            textSize = resources.getDimensionPixelSize(R.dimen.tiny_text_size).toFloat()
+            textSize = resources.getDimensionPixelSize(R.dimen.year_view_day_text_size).toFloat()
             textAlign = Paint.Align.RIGHT
         }
 
         mColoredPaint = Paint(mPaint)
         mColoredPaint.color = mColoredTextColor
+        mIsLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (mDayWidth == 0f) {
-            mDayWidth = (canvas.width / 7).toFloat()
+            mDayWidth = if (mIsLandscape) {
+                (canvas.width / 9).toFloat()
+            } else {
+                (canvas.width / 7).toFloat()
+            }
         }
 
         var curId = 1 - mFirstDay
         for (y in 1..6) {
             for (x in 1..7) {
-                if (curId > 0 && curId <= mDays) {
+                if (curId in 1..mDays) {
                     canvas.drawText(curId.toString(), x * mDayWidth, y * mDayWidth, getPaint(curId))
 
                     if (curId == mTodaysId) {
-                        canvas.drawCircle(x * mDayWidth - mDayWidth / 4, y * mDayWidth - mDayWidth / 4, mDayWidth * 0.41f, mColoredPaint)
+                        val dividerConstant = if (mIsLandscape) 6 else 4
+                        canvas.drawCircle(x * mDayWidth - mDayWidth / dividerConstant, y * mDayWidth - mDayWidth / dividerConstant, mDayWidth * 0.41f, mColoredPaint)
                     }
                 }
                 curId++

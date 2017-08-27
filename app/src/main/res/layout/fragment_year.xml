@@ -13,6 +13,7 @@
             android:id="@+id/month_1_holder"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginEnd="@dimen/yearly_padding_full"
             android:layout_marginRight="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
@@ -29,7 +30,8 @@
                 android:id="@+id/month_1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_below="@+id/month_1_label"/>
+                android:layout_below="@+id/month_1_label"
+                android:layout_centerInParent="true"/>
 
         </RelativeLayout>
 
@@ -63,6 +65,7 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_marginLeft="@dimen/yearly_padding_full"
+            android:layout_marginStart="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
             <com.simplemobiletools.commons.views.MyTextView
@@ -79,6 +82,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_below="@+id/month_3_label"/>
+
         </RelativeLayout>
     </TableRow>
 
@@ -88,6 +92,7 @@
             android:id="@+id/month_4_holder"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginEnd="@dimen/yearly_padding_full"
             android:layout_marginRight="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
@@ -106,6 +111,7 @@
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_4_label"
                 app:days="30"/>
+
         </RelativeLayout>
 
         <RelativeLayout
@@ -138,6 +144,7 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_marginLeft="@dimen/yearly_padding_full"
+            android:layout_marginStart="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
             <com.simplemobiletools.commons.views.MyTextView
@@ -164,6 +171,7 @@
             android:id="@+id/month_7_holder"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginEnd="@dimen/yearly_padding_full"
             android:layout_marginRight="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
@@ -205,6 +213,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_8_label"/>
+
         </RelativeLayout>
 
         <RelativeLayout
@@ -212,6 +221,7 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_marginLeft="@dimen/yearly_padding_full"
+            android:layout_marginStart="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
             <com.simplemobiletools.commons.views.MyTextView
@@ -229,6 +239,7 @@
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_9_label"
                 app:days="30"/>
+
         </RelativeLayout>
     </TableRow>
 
@@ -238,6 +249,7 @@
             android:id="@+id/month_10_holder"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginEnd="@dimen/yearly_padding_full"
             android:layout_marginRight="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
@@ -255,6 +267,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_10_label"/>
+
         </RelativeLayout>
 
         <RelativeLayout
@@ -279,6 +292,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_11_label"
+                android:layout_marginLeft="@dimen/yearly_month_padding"
+                android:layout_marginStart="@dimen/yearly_month_padding"
                 app:days="30"/>
         </RelativeLayout>
 
@@ -287,6 +302,7 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_marginLeft="@dimen/yearly_padding_full"
+            android:layout_marginStart="@dimen/yearly_padding_full"
             android:layout_weight="1">
 
             <com.simplemobiletools.commons.views.MyTextView
@@ -303,6 +319,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:layout_below="@+id/month_12_label"/>
+
         </RelativeLayout>
     </TableRow>
 </TableLayout>

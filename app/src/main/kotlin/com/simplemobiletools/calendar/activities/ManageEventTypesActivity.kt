@@ -5,7 +5,7 @@ import android.view.Menu
 import android.view.MenuItem
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.adapters.EventTypeAdapter
-import com.simplemobiletools.calendar.dialogs.NewEventTypeDialog
+import com.simplemobiletools.calendar.dialogs.UpdateEventTypeDialog
 import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.helpers.DBHelper
 import com.simplemobiletools.calendar.interfaces.DeleteEventTypesListener
@@ -25,7 +25,7 @@ class ManageEventTypesActivity : SimpleActivity(), DeleteEventTypesListener {
     }
 
     private fun showEventTypeDialog(eventType: EventType? = null) {
-        NewEventTypeDialog(this, eventType) {
+        UpdateEventTypeDialog(this, eventType!!.copy()) {
             getEventTypes()
         }
     }
@@ -53,12 +53,16 @@ class ManageEventTypesActivity : SimpleActivity(), DeleteEventTypesListener {
         return true
     }
 
-    override fun deleteEventTypes(ids: ArrayList<Int>, deleteEvents: Boolean) {
-        if (ids.contains(DBHelper.REGULAR_EVENT_TYPE_ID)) {
+    override fun deleteEventTypes(eventTypes: ArrayList<EventType>, deleteEvents: Boolean) {
+        if (eventTypes.map { it.id }.contains(DBHelper.REGULAR_EVENT_TYPE_ID)) {
             toast(R.string.cannot_delete_default_type)
         }
 
-        dbHelper.deleteEventTypes(ids, deleteEvents) {
+        if (eventTypes.any { it.caldavCalendarId != 0 }) {
+            toast(R.string.unsync_caldav_calendar)
+        }
+
+        dbHelper.deleteEventTypes(eventTypes, deleteEvents) {
             if (it > 0) {
                 getEventTypes()
             } else {

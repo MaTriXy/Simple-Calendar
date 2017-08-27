@@ -1,18 +1,28 @@
 package com.simplemobiletools.calendar.activities
 
-import android.accounts.AccountManager
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
+import android.support.v4.app.ActivityCompat
+import android.text.TextUtils
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.dialogs.CustomEventReminderDialog
+import com.simplemobiletools.calendar.dialogs.SelectCalendarsDialog
 import com.simplemobiletools.calendar.dialogs.SnoozePickerDialog
-import com.simplemobiletools.calendar.extensions.config
-import com.simplemobiletools.calendar.extensions.dbHelper
-import com.simplemobiletools.calendar.extensions.getFormattedMinutes
+import com.simplemobiletools.calendar.extensions.*
+import com.simplemobiletools.calendar.helpers.CalDAVHandler
+import com.simplemobiletools.calendar.helpers.FONT_SIZE_LARGE
+import com.simplemobiletools.calendar.helpers.FONT_SIZE_MEDIUM
+import com.simplemobiletools.calendar.helpers.FONT_SIZE_SMALL
+import com.simplemobiletools.calendar.models.EventType
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
+import com.simplemobiletools.commons.extensions.beGone
+import com.simplemobiletools.commons.extensions.beVisibleIf
 import com.simplemobiletools.commons.extensions.toast
 import com.simplemobiletools.commons.extensions.updateTextColors
 import com.simplemobiletools.commons.models.RadioItem
@@ -20,23 +30,16 @@ import kotlinx.android.synthetic.main.activity_settings.*
 
 class SettingsActivity : SimpleActivity() {
     private val GET_RINGTONE_URI = 1
-    private val ACCOUNTS_PERMISSION = 2
-    private val REQUEST_ACCOUNT_NAME = 3
-    private val REQUEST_GOOGLE_PLAY_SERVICES = 4
+    private val CALENDAR_PERMISSION = 5
 
+    lateinit var res: Resources
     private var mStoredPrimaryColor = 0
-
-    companion object {
-        val REQUEST_AUTHORIZATION = 5
-    }
-
-    //lateinit var credential: GoogleAccountCredential
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
-
-        //credential = GoogleAccountCredential.usingOAuth2(this, arrayListOf(CalendarScopes.CALENDAR_READONLY)).setBackOff(ExponentialBackOff())
+        res = resources
+        setupCaldavSync()
     }
 
     override fun onResume() {
@@ -47,7 +50,6 @@ class SettingsActivity : SimpleActivity() {
         setupHourFormat()
         setupSundayFirst()
         setupWeekNumbers()
-        setupGoogleSync()
         setupWeeklyStart()
         setupWeeklyEnd()
         setupVibrate()
@@ -55,6 +57,7 @@ class SettingsActivity : SimpleActivity() {
         setupSnoozeDelay()
         setupEventReminder()
         setupDisplayPastEvents()
+        setupFontSize()
         updateTextColors(settings_holder)
         checkPrimaryColor()
     }
@@ -67,8 +70,8 @@ class SettingsActivity : SimpleActivity() {
     private fun checkPrimaryColor() {
         if (config.primaryColor != mStoredPrimaryColor) {
             dbHelper.getEventTypes {
-                if (it.size == 1) {
-                    val eventType = it[0]
+                if (it.filter { it.caldavCalendarId == 0 }.size == 1) {
+                    val eventType = it.first { it.caldavCalendarId == 0 }
                     eventType.color = config.primaryColor
                     dbHelper.updateEventType(eventType)
                 }
@@ -96,15 +99,72 @@ class SettingsActivity : SimpleActivity() {
         }
     }
 
-    private fun setupGoogleSync() {
-        settings_google_sync.isChecked = config.googleSync
-        settings_google_sync_holder.setOnClickListener {
-            settings_google_sync.toggle()
-            config.googleSync = settings_google_sync.isChecked
-
-            if (settings_google_sync.isChecked) {
-                //tryEnablingSync()
+    private fun setupCaldavSync() {
+        settings_caldav_sync.isChecked = config.caldavSync
+        settings_caldav_sync_holder.setOnClickListener {
+            if (config.caldavSync) {
+                toggleCaldavSync(false)
+            } else {
+                if (hasCalendarPermission()) {
+                    toggleCaldavSync(true)
+                } else {
+                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_CALENDAR), CALENDAR_PERMISSION)
+                }
             }
+        }
+
+        settings_manage_synced_calendars_holder.beVisibleIf(config.caldavSync)
+        settings_manage_synced_calendars_holder.setOnClickListener {
+            showCalendarPicker()
+        }
+    }
+
+    private fun toggleCaldavSync(enable: Boolean) {
+        if (enable) {
+            showCalendarPicker()
+        } else {
+            settings_caldav_sync.isChecked = false
+            config.caldavSync = false
+            settings_manage_synced_calendars_holder.beGone()
+            config.getSyncedCalendarIdsAsList().forEach {
+                CalDAVHandler(applicationContext).deleteCalDAVCalendarEvents(it.toLong())
+            }
+            dbHelper.deleteEventTypesWithCalendarId(config.caldavSyncedCalendarIDs)
+        }
+    }
+
+    private fun showCalendarPicker() {
+        val oldCalendarIds = config.getSyncedCalendarIdsAsList()
+
+        SelectCalendarsDialog(this) {
+            val newCalendarIds = config.getSyncedCalendarIdsAsList()
+            settings_manage_synced_calendars_holder.beVisibleIf(newCalendarIds.isNotEmpty())
+            settings_caldav_sync.isChecked = newCalendarIds.isNotEmpty()
+            config.caldavSync = newCalendarIds.isNotEmpty()
+
+            Thread({
+                if (newCalendarIds.isNotEmpty()) {
+                    val existingEventTypeNames = dbHelper.fetchEventTypes().map { it.getDisplayTitle().toLowerCase() } as ArrayList<String>
+                    getSyncedCalDAVCalendars().forEach {
+                        val calendarTitle = it.getFullTitle()
+                        if (!existingEventTypeNames.contains(calendarTitle.toLowerCase())) {
+                            val eventType = EventType(0, it.displayName, it.color, it.id, it.displayName, it.accountName)
+                            existingEventTypeNames.add(calendarTitle.toLowerCase())
+                            dbHelper.insertEventType(eventType)
+                        }
+                    }
+                    CalDAVHandler(applicationContext).refreshCalendars {}
+                }
+
+                val removedCalendarIds = oldCalendarIds.filter { !newCalendarIds.contains(it) }
+                removedCalendarIds.forEach {
+                    CalDAVHandler(applicationContext).deleteCalDAVCalendarEvents(it.toLong())
+                    dbHelper.getEventTypeWithCalDAVCalendarId(it.toInt())?.apply {
+                        dbHelper.deleteEventTypes(arrayListOf(this), true) {}
+                    }
+                }
+                dbHelper.deleteEventTypesWithCalendarId(TextUtils.join(",", removedCalendarIds))
+            }).start()
         }
     }
 
@@ -159,7 +219,7 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun setupReminderSound() {
-        val noRingtone = resources.getString(R.string.no_ringtone_selected)
+        val noRingtone = res.getString(R.string.no_ringtone_selected)
         if (config.reminderSound.isEmpty()) {
             settings_reminder_sound.text = noRingtone
         } else {
@@ -168,7 +228,7 @@ class SettingsActivity : SimpleActivity() {
         settings_reminder_sound_holder.setOnClickListener {
             Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                 putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
-                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, resources.getString(R.string.reminder_sound))
+                putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, res.getString(R.string.reminder_sound))
                 putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(config.reminderSound))
 
                 if (resolveActivity(packageManager) != null)
@@ -199,7 +259,7 @@ class SettingsActivity : SimpleActivity() {
     }
 
     private fun updateSnoozeText() {
-        settings_snooze_delay.text = resources.getQuantityString(R.plurals.minutes, config.snoozeDelay, config.snoozeDelay)
+        settings_snooze_delay.text = res.getQuantityString(R.plurals.by_minutes, config.snoozeDelay, config.snoozeDelay)
     }
 
     private fun setupEventReminder() {
@@ -245,68 +305,50 @@ class SettingsActivity : SimpleActivity() {
             getFormattedMinutes(displayPastEvents, false)
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
+    private fun setupFontSize() {
+        settings_font_size.text = getFontSizeText()
+        settings_font_size_holder.setOnClickListener {
+            val items = arrayListOf(
+                    RadioItem(FONT_SIZE_SMALL, res.getString(R.string.small)),
+                    RadioItem(FONT_SIZE_MEDIUM, res.getString(R.string.medium)),
+                    RadioItem(FONT_SIZE_LARGE, res.getString(R.string.large)))
+
+            RadioGroupDialog(this@SettingsActivity, items, config.fontSize) {
+                config.fontSize = it as Int
+                settings_font_size.text = getFontSizeText()
+                updateWidgets()
+                updateListWidget()
+            }
+        }
+    }
+
+    private fun getFontSizeText() = getString(when (config.fontSize) {
+        FONT_SIZE_SMALL -> R.string.small
+        FONT_SIZE_MEDIUM -> R.string.medium
+        else -> R.string.large
+    })
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (resultCode == RESULT_OK) {
             if (requestCode == GET_RINGTONE_URI) {
-                val uri = resultData?.getParcelableExtra<Parcelable>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                val uri = data?.getParcelableExtra<Parcelable>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
                 if (uri == null) {
                     config.reminderSound = ""
                 } else {
                     settings_reminder_sound.text = RingtoneManager.getRingtone(this, uri as Uri)?.getTitle(this)
                     config.reminderSound = uri.toString()
                 }
-            } else if (requestCode == REQUEST_ACCOUNT_NAME && resultData?.extras != null) {
-                val accountName = resultData.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
-                config.syncAccountName = accountName
-                //tryEnablingSync()
-            } else if (requestCode == REQUEST_AUTHORIZATION) {
-                //tryEnablingSync()
             }
         }
     }
-
-    /*private fun tryEnablingSync() {
-        if (!isGooglePlayServicesAvailable()) {
-            acquireGooglePlayServices()
-        } else if (!hasGetAccountsPermission()) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.GET_ACCOUNTS), ACCOUNTS_PERMISSION)
-        } else if (config.syncAccountName.isEmpty()) {
-            showAccountChooser()
-        } else {
-            credential.selectedAccountName = config.syncAccountName
-            FetchGoogleEventsTask(this, credential).execute()
-        }
-    }
-
-    private fun isGooglePlayServicesAvailable(): Boolean {
-        val apiAvailability = GoogleApiAvailability.getInstance()
-        val connectionStatusCode = apiAvailability.isGooglePlayServicesAvailable(this)
-        return connectionStatusCode == ConnectionResult.SUCCESS
-    }
-
-    private fun acquireGooglePlayServices() {
-        val apiAvailability = GoogleApiAvailability.getInstance()
-        val connectionStatusCode = apiAvailability.isGooglePlayServicesAvailable(this)
-        if (apiAvailability.isUserResolvableError(connectionStatusCode)) {
-            GoogleApiAvailability.getInstance().getErrorDialog(this, connectionStatusCode, REQUEST_GOOGLE_PLAY_SERVICES).show()
-        }
-    }
-
-    private fun hasGetAccountsPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.GET_ACCOUNTS) == PackageManager.PERMISSION_GRANTED
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode == ACCOUNTS_PERMISSION) {
+        if (requestCode == CALENDAR_PERMISSION) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                showAccountChooser()
+                toggleCaldavSync(true)
             }
         }
     }
-
-    private fun showAccountChooser() {
-        if (config.syncAccountName.isEmpty()) {
-            startActivityForResult(credential.newChooseAccountIntent(), REQUEST_ACCOUNT_NAME)
-        }
-    }*/
 }

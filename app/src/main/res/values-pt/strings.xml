@@ -142,6 +142,7 @@
     <string name="export_past_events_too">Exportar eventos antigos</string>
     <string name="include_event_types">Incluir tipos de eventos</string>
     <string name="filename_without_ics">Nome do ficheiro (sem .ics)</string>
+    <string name="no_title">Sem título</string>
 
     <!-- Event details -->
     <string name="title">Título</string>
@@ -162,6 +163,7 @@
     <string name="select_event_type">Selecione um tipo de evento</string>
     <string name="move_events_into_default">Mover eventos afetados para o tipo de evento padrão</string>
     <string name="remove_affected_events">Remover permanentemente os eventos afetados</string>
+    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
 
     <!-- Holidays -->
     <string name="holidays">Feriados</string>
@@ -185,16 +187,27 @@
     <string name="no_ringtone_picker">Não foi encontrada uma aplicação capaz de definir o som</string>
     <string name="no_ringtone_selected">Nenhum</string>
     <string name="day_end_before_start">O dia final não pode ser antes do inicial</string>
-    <string name="google_sync">Sincronização Google</string>
+    <string name="caldav_sync">Sincronização CalDAV</string>
     <string name="display_past_events">Mostrar eventos passados</string>
     <string name="snooze_delay">Adiar lembrete com a opção Snooze</string>
+    <string name="widgets">Widgets</string>
 
-    <plurals name="minutes">
+    <!-- CalDAV sync -->
+    <string name="caldav">CalDAV</string>
+    <string name="select_caldav_calendars">Selecione os calendários a sincronizar</string>
+    <string name="manage_synced_calendars">Gerir calendários sincronizados</string>
+    <string name="store_locally_only">Store locally only</string>
+    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="refreshing_complete">Refreshing complete</string>
+    <string name="editing_calendar_failed">Editing calendar failed</string>
+
+    <plurals name="by_minutes">
         <item quantity="one">%1$d minuto</item>
         <item quantity="other">%1$d minutos</item>
     </plurals>
 
-    <plurals name="hours">
+    <plurals name="by_hours">
         <item quantity="one">%1$d hora</item>
         <item quantity="other">%1$d horas</item>
     </plurals>
@@ -261,6 +274,8 @@
         Não contém anúncios nem permissões desnecessárias. Disponibiliza um tema escuro e é totalmente \'open source\'.
 
         A permissão de armazenamento é necessária apenas para importar eventos de ficheiros .ics.
+
+        Internet and Contacts permissions are used only at Google sync.
 
         Esta aplicação é apenas parte de um conjunto mais vasto de aplicações. Saiba mais em http://www.simplemobiletools.com
     </string>

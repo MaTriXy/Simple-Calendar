@@ -97,7 +97,7 @@
 
     <plurals name="years">
         <item quantity="one">%1$d rok</item>
-        <item quantity="two">%1$d roky</item>
+        <item quantity="few">%1$d roky</item>
         <item quantity="other">%1$d rokov</item>
     </plurals>
 
@@ -149,6 +149,7 @@
     <string name="export_past_events_too">Exportovať aj minulé udalosti</string>
     <string name="include_event_types">Zahrnúť typy udalostí</string>
     <string name="filename_without_ics">Názov súboru (bez .ics)</string>
+    <string name="no_title">Bez názvu</string>
 
     <!-- Event details -->
     <string name="title">Názov</string>
@@ -172,6 +173,7 @@
     <string name="importing_holidays_failed">Importovanie udalostí zlyhalo</string>
     <string name="move_events_into_default">Presunúť dotknuté udalosti do predvoleného typu udalostí</string>
     <string name="remove_affected_events">Natrvalo odstrániť dotknuté udalosti</string>
+    <string name="unsync_caldav_calendar">Na odstránenie CalDAV kalendára musíte vypnúť jeho synchronizáciu</string>
 
     <!-- Holidays -->
     <string name="holidays">Sviatky</string>
@@ -192,19 +194,30 @@
     <string name="no_ringtone_picker">Nenašla sa žiadna aplikácia na zmenu zvučky</string>
     <string name="no_ringtone_selected">Žiadna</string>
     <string name="day_end_before_start">Deň nemôže skončiť skôr než začne</string>
-    <string name="google_sync">Google synchronizácia</string>
+    <string name="caldav_sync">CalDAV synchronizácia</string>
     <string name="display_past_events">Zobraziť minulé udalosti spred</string>
     <string name="snooze_delay">Posunúť pripomienku s Odložiť o</string>
+    <string name="widgets">Widgety</string>
 
-    <plurals name="minutes">
+    <!-- CalDAV sync -->
+    <string name="caldav">CalDAV</string>
+    <string name="select_caldav_calendars">Zvoľte kalendáre pre synchronizáciu</string>
+    <string name="manage_synced_calendars">Spravovať synchronizované kalendáre</string>
+    <string name="store_locally_only">Uložiť iba lokálne</string>
+    <string name="refresh_caldav_calendars">Obnoviť CalDAV kalendáre</string>
+    <string name="refreshing">Obnovuje sa…</string>
+    <string name="refreshing_complete">Obnovovanie ukončené</string>
+    <string name="editing_calendar_failed">Úprava kalendára zlyhala</string>
+
+    <plurals name="by_minutes">
         <item quantity="one">%1$d minútu</item>
         <item quantity="few">%1$d minúty</item>
         <item quantity="other">%1$d minút</item>
     </plurals>
 
-    <plurals name="hours">
-        <item quantity="one">%1$d hodiny</item>
-        <item quantity="few">%1$d hodín</item>
+    <plurals name="by_hours">
+        <item quantity="one">%1$d hodinu</item>
+        <item quantity="few">%1$d hodiny</item>
         <item quantity="other">%1$d hodín</item>
     </plurals>
 
@@ -263,13 +276,15 @@
     <!-- Short description has to have less than 80 chars -->
     <string name="app_short_description">Jednoduchý kalendár s udalosťami, upraviteľným widgetom a bez reklám.</string>
     <string name="app_long_description">
-        Offline kalendár bez integrácie iného kalendára. Viete si jednoducho vytvoriť opakujúce sa udalosti s pripomienkami, alebo zobraziť čísla týždňov.
+        Jednoduchý kalendár s možnosťou Google synchronizácie. Viete si jednoducho vytvoriť opakujúce sa udalosti s pripomienkami, alebo zobraziť čísla týždňov.
 
         Obsahuje škálovateľný 4x4 widget, kde viete upraviť farbu textu, ako aj priehľadnosť a farbu pozadia.
 
         Neobsahuje žiadne reklamy a nepotrebné oprávnenia. Je opensource, poskytuje možnosť zmeny farieb.
 
         Oprávnenie na prístup k súborom je potrebné iba v prípade importovania udalostí z .ics súboru.
+
+        Oprávnenie k internetu a Kontaktom je používané iba pri Google synchronizácií.
 
         Táto aplikácia je iba jednou zo skupiny aplikácií. Ostatné viete nájsť na http://www.simplemobiletools.com
     </string>

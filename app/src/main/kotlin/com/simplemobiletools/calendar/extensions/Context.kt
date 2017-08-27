@@ -1,5 +1,6 @@
 package com.simplemobiletools.calendar.extensions
 
+import android.Manifest
 import android.annotation.TargetApi
 import android.app.AlarmManager
 import android.app.Notification
@@ -9,15 +10,18 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
+import android.support.v4.content.ContextCompat
 import android.support.v7.app.NotificationCompat
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.activities.EventActivity
 import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.models.Event
+import com.simplemobiletools.calendar.receivers.CalDAVSyncReceiver
 import com.simplemobiletools.calendar.receivers.NotificationReceiver
 import com.simplemobiletools.calendar.services.SnoozeService
 import com.simplemobiletools.commons.extensions.getContrastColor
@@ -27,6 +31,8 @@ import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import java.text.SimpleDateFormat
 import java.util.*
+
+fun Context.hasCalendarPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
 fun Context.updateWidgets() {
     val widgetsCnt = AppWidgetManager.getInstance(this).getAppWidgetIds(ComponentName(this, MyWidgetMonthlyProvider::class.java))
@@ -127,10 +133,10 @@ fun Context.getFormattedMinutes(minutes: Int, showBefore: Boolean = true) = when
         else if (minutes % 1440 == 0)
             resources.getQuantityString(R.plurals.days, minutes / 1440, minutes / 1440)
         else if (minutes % 60 == 0) {
-            val base = if (showBefore) R.plurals.hours_before else R.plurals.hours
+            val base = if (showBefore) R.plurals.hours_before else R.plurals.by_hours
             resources.getQuantityString(base, minutes / 60, minutes / 60)
         } else {
-            val base = if (showBefore) R.plurals.minutes_before else R.plurals.minutes
+            val base = if (showBefore) R.plurals.minutes_before else R.plurals.by_minutes
             resources.getQuantityString(base, minutes, minutes)
         }
     }
@@ -170,7 +176,7 @@ fun Context.notifyEvent(event: Event) {
     val pendingIntent = getPendingIntent(this, event)
     val startTime = Formatter.getTimeFromTS(this, event.startTS)
     val endTime = Formatter.getTimeFromTS(this, event.endTS)
-    val timeRange = if (event.isAllDay) getString(R.string.all_day) else getFormattedEventTime(startTime, endTime)
+    val timeRange = if (event.getIsAllDay()) getString(R.string.all_day) else getFormattedEventTime(startTime, endTime)
     val notification = getNotification(this, pendingIntent, event, "$timeRange ${event.description}")
     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.notify(event.id, notification)
@@ -228,6 +234,27 @@ fun Context.launchNewEventIntent(startNewTask: Boolean = false, today: Boolean =
 fun Context.getNewEventTimestampFromCode(dayCode: String) = Formatter.getLocalDateTimeFromCode(dayCode).withTime(13, 0, 0, 0).seconds()
 
 fun Context.getCurrentOffset() = SimpleDateFormat("Z", Locale.getDefault()).format(Date())
+
+fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(this).getCalDAVCalendars(config.caldavSyncedCalendarIDs)
+
+fun Context.recheckCalDAVCalendars(callback: () -> Unit) {
+    if (config.caldavSync) {
+        CalDAVHandler(this).refreshCalendars(callback)
+    }
+}
+
+fun Context.scheduleCalDAVSync(activate: Boolean) {
+    val syncIntent = Intent(this, CalDAVSyncReceiver::class.java)
+    val pendingIntent = PendingIntent.getBroadcast(this, 0, syncIntent, PendingIntent.FLAG_CANCEL_CURRENT)
+    val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    if (activate) {
+        val syncCheckInterval = 4 * AlarmManager.INTERVAL_HOUR
+        alarm.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + syncCheckInterval, syncCheckInterval, pendingIntent)
+    } else {
+        alarm.cancel(pendingIntent)
+    }
+}
 
 val Context.config: Config get() = Config.newInstance(this)
 

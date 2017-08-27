@@ -142,6 +142,7 @@
     <string name="export_past_events_too">Export past events too</string>
     <string name="include_event_types">Include event types</string>
     <string name="filename_without_ics">Filename (without .ics)</string>
+    <string name="no_title">No title</string>
 
     <!-- Event details -->
     <string name="title">Név</string>
@@ -162,6 +163,7 @@
     <string name="select_event_type">Select an event type</string>
     <string name="move_events_into_default">Move affected events into the default event type</string>
     <string name="remove_affected_events">Permanently remove affected events</string>
+    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
 
     <!-- Holidays -->
     <string name="holidays">Holidays</string>
@@ -185,16 +187,27 @@
     <string name="no_ringtone_picker">No app capable of setting ringtone found</string>
     <string name="no_ringtone_selected">None</string>
     <string name="day_end_before_start">The day cannot end earlier than it starts</string>
-    <string name="google_sync">Google sync</string>
+    <string name="caldav_sync">CalDAV sync</string>
     <string name="display_past_events">Display events from the past</string>
     <string name="snooze_delay">Postpone reminder with Snooze by</string>
+    <string name="widgets">Widgets</string>
 
-    <plurals name="minutes">
+    <!-- CalDAV sync -->
+    <string name="caldav">CalDAV</string>
+    <string name="select_caldav_calendars">Select calendars to sync</string>
+    <string name="manage_synced_calendars">Manage synced calendars</string>
+    <string name="store_locally_only">Store locally only</string>
+    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="refreshing_complete">Refreshing complete</string>
+    <string name="editing_calendar_failed">Editing calendar failed</string>
+
+    <plurals name="by_minutes">
         <item quantity="one">%1$d minute</item>
         <item quantity="other">%1$d minutes</item>
     </plurals>
 
-    <plurals name="hours">
+    <plurals name="by_hours">
         <item quantity="one">%1$d hour</item>
         <item quantity="other">%1$d hours</item>
     </plurals>
@@ -254,13 +267,15 @@
     <!-- Short description has to have less than 80 chars -->
     <string name="app_short_description">Egy egyszerű naptár bejegyzésekkel, widget-tel és reklámok nélkül.</string>
     <string name="app_long_description">
-        Egy internet-kapcsolatot nem igénylő naptár, más naptárokkal való integráció nélkül. Könnyedén lehet ismétlődő eseményeket és emlékeztetőket felvenni, és a hetek sorszámait is mutatja.
+        Egy egyszerű naptár, Google integráció lehetőségével. Könnyedén lehet ismétlődő eseményeket és emlékeztetőket felvenni, és a hetek sorszámait is mutatja.
 
         Egy 4x4-es átméretezhető widget-et is biztosít, aminek beállíthatod a színét, az alfáját és a háttérszínét is.
 
         Nincsenek reklámok, és nem igényel szükségtelen engedélyeket. A forráskódja teljesen nyílt, és sötét téma is beállítható.
 
         The Storage permission is needed only for importing events from .ics files.
+
+        Internet and Contacts permissions are used only at Google sync.
 
         Ez az alkalmazás egy nagyobb alkalmazás-sorozat része. A továbbiak itt találhatók: http://www.simplemobiletools.com
     </string>

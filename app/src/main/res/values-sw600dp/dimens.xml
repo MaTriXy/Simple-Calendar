@@ -12,4 +12,6 @@
     <dimen name="meta_text_size">20sp</dimen>
     <dimen name="day_text_size">22sp</dimen>
     <dimen name="month_text_size">26sp</dimen>
+
+    <dimen name="year_view_day_text_size">12sp</dimen>
 </resources>

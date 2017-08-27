@@ -3,14 +3,9 @@ package com.simplemobiletools.calendar.helpers
 import android.content.Context
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.extensions.dbHelper
-import com.simplemobiletools.calendar.extensions.isXMonthlyRepetition
-import com.simplemobiletools.calendar.extensions.isXWeeklyRepetition
-import com.simplemobiletools.calendar.extensions.seconds
 import com.simplemobiletools.calendar.helpers.IcsImporter.ImportResult.*
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.EventType
-import org.joda.time.DateTimeZone
-import org.joda.time.format.DateTimeFormat
 import java.io.File
 
 class IcsImporter {
@@ -30,6 +25,7 @@ class IcsImporter {
     var curRepeatLimit = 0
     var curRepeatRule = 0
     var curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
+    var curLastModified = 0L
     var isNotificationDescription = false
     var lastReminderAction = ""
 
@@ -67,7 +63,7 @@ class IcsImporter {
                         curEnd = getTimestamp(line.substring(DTEND.length))
                     } else if (line.startsWith(DURATION)) {
                         val duration = line.substring(DURATION.length)
-                        curEnd = curStart + decodeTime(duration)
+                        curEnd = curStart + Parser().parseDurationSeconds(duration)
                     } else if (line.startsWith(SUMMARY) && !isNotificationDescription) {
                         curTitle = line.substring(SUMMARY.length)
                         curTitle = getTitle(curTitle).replace("\\n", "\n")
@@ -76,16 +72,21 @@ class IcsImporter {
                     } else if (line.startsWith(UID)) {
                         curImportId = line.substring(UID.length)
                     } else if (line.startsWith(RRULE)) {
-                        curRepeatInterval = parseRepeatInterval(line.substring(RRULE.length))
+                        val repeatRule = Parser().parseRepeatInterval(line.substring(RRULE.length), curStart)
+                        curRepeatRule = repeatRule.repeatRule
+                        curRepeatInterval = repeatRule.repeatInterval
+                        curRepeatLimit = repeatRule.repeatLimit
                     } else if (line.startsWith(ACTION)) {
                         isNotificationDescription = true
                         lastReminderAction = line.substring(ACTION.length)
                     } else if (line.startsWith(TRIGGER)) {
                         if (lastReminderAction == DISPLAY)
-                            curReminderMinutes.add(decodeTime(line.substring(TRIGGER.length)) / 60)
+                            curReminderMinutes.add(Parser().parseDurationSeconds(line.substring(TRIGGER.length)) / 60)
                     } else if (line.startsWith(CATEGORIES)) {
                         val categories = line.substring(CATEGORIES.length)
                         tryAddCategories(categories, context)
+                    } else if (line.startsWith(LAST_MODIFIED)) {
+                        curLastModified = getTimestamp(line.substring(LAST_MODIFIED.length)) * 1000L
                     } else if (line.startsWith(EXDATE)) {
                         curRepeatExceptions.add(getTimestamp(line.substring(EXDATE.length)))
                     } else if (line == END_EVENT) {
@@ -97,13 +98,14 @@ class IcsImporter {
 
                         val event = Event(0, curStart, curEnd, curTitle, curDescription, curReminderMinutes.getOrElse(0, { -1 }),
                                 curReminderMinutes.getOrElse(1, { -1 }), curReminderMinutes.getOrElse(2, { -1 }), curRepeatInterval,
-                                curImportId, curFlags, curRepeatLimit, curRepeatRule, curEventType)
+                                curImportId, curFlags, curRepeatLimit, curRepeatRule, curEventType, lastUpdated = curLastModified,
+                                source = SOURCE_IMPORTED_ICS)
 
-                        if (event.isAllDay && curEnd > curStart) {
+                        if (event.getIsAllDay() && curEnd > curStart) {
                             event.endTS -= DAY
                         }
 
-                        context.dbHelper.insert(event) {
+                        context.dbHelper.insert(event, true) {
                             for (exceptionTS in curRepeatExceptions) {
                                 context.dbHelper.addEventRepeatException(it, exceptionTS)
                             }
@@ -134,23 +136,13 @@ class IcsImporter {
                 if (!value.contains("T"))
                     curFlags = curFlags or FLAG_ALL_DAY
 
-                parseDateTimeValue(value)
+                Parser().parseDateTimeValue(value)
             } else {
-                parseDateTimeValue(fullString.substring(1))
+                Parser().parseDateTimeValue(fullString.substring(1))
             }
         } catch (e: Exception) {
             eventsFailed++
             return -1
-        }
-    }
-
-    private fun parseDateTimeValue(value: String): Int {
-        val edited = value.replace("T", "").replace("Z", "")
-        return if (edited.length == 14) {
-            parseLongFormat(edited, value.endsWith("Z"))
-        } else {
-            val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd")
-            dateTimeFormat.parseDateTime(edited).withZoneRetainFields(DateTimeZone.getDefault()).withHourOfDay(1).seconds()
         }
     }
 
@@ -178,91 +170,6 @@ class IcsImporter {
         }
     }
 
-    // P0DT1H0M0S
-    private fun decodeTime(duration: String): Int {
-        val weeks = getDurationValue(duration, "W")
-        val days = getDurationValue(duration, "DT")
-        val hours = getDurationValue(duration, "H")
-        val minutes = getDurationValue(duration, "M")
-        val seconds = getDurationValue(duration, "S")
-
-        val minSecs = 60
-        val hourSecs = minSecs * 60
-        val daySecs = hourSecs * 24
-        val weekSecs = daySecs * 7
-
-        return seconds + (minutes * minSecs) + (hours * hourSecs) + (days * daySecs) + (weeks * weekSecs)
-    }
-
-    private fun getDurationValue(duration: String, char: String): Int = Regex("[0-9]+(?=$char)").find(duration)?.value?.toInt() ?: 0
-
-    private fun parseLongFormat(digitString: String, useUTC: Boolean): Int {
-        val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMddHHmmss")
-        val dateTimeZone = if (useUTC) DateTimeZone.UTC else DateTimeZone.getDefault()
-        return dateTimeFormat.parseDateTime(digitString).withZoneRetainFields(dateTimeZone).seconds()
-    }
-
-    private fun parseRepeatInterval(fullString: String): Int {
-        val parts = fullString.split(";")
-        var frequencySeconds = 0
-        for (part in parts) {
-            val keyValue = part.split("=")
-            val key = keyValue[0]
-            val value = keyValue[1]
-            if (key == FREQ) {
-                frequencySeconds = getFrequencySeconds(value)
-                if (value == WEEKLY) {
-                    val start = Formatter.getDateTimeFromTS(curStart)
-                    curRepeatRule = Math.pow(2.0, (start.dayOfWeek - 1).toDouble()).toInt()
-                } else if (value == MONTHLY) {
-                    curRepeatRule = REPEAT_MONTH_SAME_DAY
-                }
-            } else if (key == COUNT) {
-                curRepeatLimit = -value.toInt()
-            } else if (key == UNTIL) {
-                curRepeatLimit = parseDateTimeValue(value)
-            } else if (key == INTERVAL) {
-                frequencySeconds *= value.toInt()
-            } else if (key == BYDAY) {
-                if (frequencySeconds.isXWeeklyRepetition()) {
-                    handleRepeatRule(value)
-                } else if (frequencySeconds.isXMonthlyRepetition()) {
-                    curRepeatRule = REPEAT_MONTH_EVERY_XTH_DAY
-                }
-            } else if (key == BYMONTHDAY && value.toInt() == -1) {
-                curRepeatRule = REPEAT_MONTH_LAST_DAY
-            }
-        }
-        return frequencySeconds
-    }
-
-    private fun getFrequencySeconds(interval: String): Int {
-        return when (interval) {
-            DAILY -> DAY
-            WEEKLY -> WEEK
-            MONTHLY -> MONTH
-            YEARLY -> YEAR
-            else -> 0
-        }
-    }
-
-    private fun handleRepeatRule(value: String) {
-        if (value.contains(MO))
-            curRepeatRule = curRepeatRule or MONDAY
-        if (value.contains(TU))
-            curRepeatRule = curRepeatRule or TUESDAY
-        if (value.contains(WE))
-            curRepeatRule = curRepeatRule or WEDNESDAY
-        if (value.contains(TH))
-            curRepeatRule = curRepeatRule or THURSDAY
-        if (value.contains(FR))
-            curRepeatRule = curRepeatRule or FRIDAY
-        if (value.contains(SA))
-            curRepeatRule = curRepeatRule or SATURDAY
-        if (value.contains(SU))
-            curRepeatRule = curRepeatRule or SUNDAY
-    }
-
     private fun resetValues() {
         curStart = -1
         curEnd = -1
@@ -276,6 +183,7 @@ class IcsImporter {
         curRepeatLimit = 0
         curRepeatRule = 0
         curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
+        curLastModified = 0L
         isNotificationDescription = false
         lastReminderAction = ""
     }

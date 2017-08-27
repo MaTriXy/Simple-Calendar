@@ -15,7 +15,7 @@ import com.simplemobiletools.commons.extensions.toast
 import com.simplemobiletools.commons.extensions.value
 import kotlinx.android.synthetic.main.dialog_event_type.view.*
 
-class NewEventTypeDialog(val activity: Activity, var eventType: EventType? = null, val callback: (eventTypeId: Int) -> Unit) : AlertDialog.Builder(activity) {
+class UpdateEventTypeDialog(val activity: Activity, var eventType: EventType? = null, val callback: (eventTypeId: Int) -> Unit) : AlertDialog.Builder(activity) {
     var isNewEvent = eventType == null
 
     init {
@@ -26,9 +26,16 @@ class NewEventTypeDialog(val activity: Activity, var eventType: EventType? = nul
             setupColor(type_color)
             type_title.setText(eventType!!.title)
             type_color.setOnClickListener {
-                ColorPickerDialog(activity, eventType!!.color) {
-                    eventType!!.color = it
-                    setupColor(type_color)
+                if (eventType?.caldavCalendarId == 0) {
+                    ColorPickerDialog(activity, eventType!!.color) {
+                        eventType!!.color = it
+                        setupColor(type_color)
+                    }
+                } else {
+                    SelectEventTypeColorDialog(activity, eventType!!) {
+                        eventType!!.color = it
+                        setupColor(type_color)
+                    }
                 }
             }
         }
@@ -55,19 +62,20 @@ class NewEventTypeDialog(val activity: Activity, var eventType: EventType? = nul
                 }
 
                 eventType!!.title = title
+                if (eventType!!.caldavCalendarId != 0)
+                    eventType!!.caldavDisplayName = title
 
-                val eventTypeId: Int
-                if (isNewEvent) {
-                    eventTypeId = activity.dbHelper.insertEventType(eventType!!)
+                val eventTypeId = if (isNewEvent) {
+                    activity.dbHelper.insertEventType(eventType!!)
                 } else {
-                    eventTypeId = activity.dbHelper.updateEventType(eventType!!)
+                    activity.dbHelper.updateEventType(eventType!!)
                 }
 
                 if (eventTypeId != -1) {
                     dismiss()
                     callback.invoke(eventTypeId)
                 } else {
-                    activity.toast(R.string.unknown_error_occurred)
+                    activity.toast(R.string.editing_calendar_failed)
                 }
             })
         }

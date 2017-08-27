@@ -10,8 +10,8 @@ android {
         applicationId "com.simplemobiletools.calendar"
         minSdkVersion 16
         targetSdkVersion 25
-        versionCode 83
-        versionName "2.5.6"
+        versionCode 87
+        versionName "2.6.1"
         multiDexEnabled true
     }
 
@@ -25,38 +25,43 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
+        fdroid {
+            initWith debug
+        }
     }
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        debug.java.srcDirs += 'src/debug/kotlin'
+        release.java.srcDirs += 'src/release/kotlin'
+        fdroid.java.srcDirs += 'src/fdroid/kotlin'
+    }
+
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 
+ext {
+    leakCanaryVersion = '1.5.2'
+}
+
 dependencies {
-    compile 'com.simplemobiletools:commons:2.21.12'
+    compile 'com.simplemobiletools:commons:2.25.4'
     compile 'joda-time:joda-time:2.9.1'
     compile 'com.facebook.stetho:stetho:1.4.1'
     compile 'com.bignerdranch.android:recyclerview-multiselect:0.2'
     compile 'com.android.support:multidex:1.0.1'
-
-    /*compile 'com.google.code.gson:gson:2.8.0'
-    compile('com.google.http-client:google-http-client-gson:1.22.0') {
-        exclude group: 'org.apache.httpcomponents'
-    }
-
-    compile 'com.google.android.gms:play-services-auth:10.0.1'
-    compile('com.google.api-client:google-api-client-android:1.22.0') {
-        exclude group: 'org.apache.httpcomponents'
-    }
-    compile('com.google.apis:google-api-services-calendar:v3-rev230-1.22.0') {
-        exclude group: 'org.apache.httpcomponents'
-    }*/
-
+    compile 'com.google.code.gson:gson:2.8.0'
     compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+    debugCompile "com.squareup.leakcanary:leakcanary-android:$leakCanaryVersion"
+    releaseCompile "com.squareup.leakcanary:leakcanary-android-no-op:$leakCanaryVersion"
 }
 
 buildscript {
-    ext.kotlin_version = '1.1.2-5'
+    ext.kotlin_version = '1.1.4-2'
     repositories {
         mavenCentral()
     }
@@ -78,7 +83,7 @@ if (propFile.canRead()) {
         android.signingConfigs.release.keyAlias = props['KEY_ALIAS']
         android.signingConfigs.release.keyPassword = props['PASSWORD']
     } else {
-        println 'signing.properties found but some entries are missing'
+        println 'signing.properties found but some release entries are missing'
         android.buildTypes.release.signingConfig = null
     }
 } else {

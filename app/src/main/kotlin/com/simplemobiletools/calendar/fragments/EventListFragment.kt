@@ -80,7 +80,7 @@ class EventListFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEvents
                 listItems.add(ListSection(day))
                 prevCode = code
             }
-            listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.isAllDay))
+            listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.getIsAllDay(), it.color))
         }
 
         val eventsAdapter = EventListAdapter(activity as SimpleActivity, listItems, this) {
@@ -111,7 +111,7 @@ class EventListFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEvents
 
     override fun deleteItems(ids: ArrayList<Int>) {
         val eventIDs = Array(ids.size, { i -> (ids[i].toString()) })
-        DBHelper.newInstance(activity.applicationContext, this).deleteEvents(eventIDs)
+        DBHelper.newInstance(activity.applicationContext, this).deleteEvents(eventIDs, true)
     }
 
     override fun addEventRepeatException(parentIds: ArrayList<Int>, timestamps: ArrayList<Int>) {
@@ -122,10 +122,6 @@ class EventListFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEvents
     }
 
     override fun eventInserted(event: Event) {
-        checkEvents()
-    }
-
-    override fun eventUpdated(event: Event) {
         checkEvents()
     }
 

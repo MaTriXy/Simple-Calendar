@@ -142,6 +142,7 @@
     <string name="export_past_events_too">vergagene Termine auch exportieren</string>
     <string name="include_event_types">Include event types</string>
     <string name="filename_without_ics">Filename (without .ics)</string>
+    <string name="no_title">No title</string>
 
     <!-- Event details -->
     <string name="title">Titel</string>
@@ -162,6 +163,7 @@
     <string name="select_event_type">Wähle einen Termin Typ</string>
     <string name="move_events_into_default">Move affected events into the default event type</string>
     <string name="remove_affected_events">Permanently remove affected events</string>
+    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
 
     <!-- Holidays -->
     <string name="holidays">Holidays</string>
@@ -185,16 +187,27 @@
     <string name="no_ringtone_picker">Keine App zum Setzen des Klingentons gefunden</string>
     <string name="no_ringtone_selected">Kein Klingelton gewählt</string>
     <string name="day_end_before_start">Terminbeginn kann nicht vor Terminende liegen</string>
-    <string name="google_sync">Google Sync</string>
+    <string name="caldav_sync">CalDAV sync</string>
     <string name="display_past_events">Display events from the past</string>
     <string name="snooze_delay">Postpone reminder with Snooze by</string>
+    <string name="widgets">Widgets</string>
 
-    <plurals name="minutes">
+    <!-- CalDAV sync -->
+    <string name="caldav">CalDAV</string>
+    <string name="select_caldav_calendars">Select calendars to sync</string>
+    <string name="manage_synced_calendars">Manage synced calendars</string>
+    <string name="store_locally_only">Store locally only</string>
+    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
+    <string name="refreshing">Refreshing…</string>
+    <string name="refreshing_complete">Refreshing complete</string>
+    <string name="editing_calendar_failed">Editing calendar failed</string>
+
+    <plurals name="by_minutes">
         <item quantity="one">%1$d minute</item>
         <item quantity="other">%1$d minutes</item>
     </plurals>
 
-    <plurals name="hours">
+    <plurals name="by_hours">
         <item quantity="one">%1$d hour</item>
         <item quantity="other">%1$d hours</item>
     </plurals>
@@ -254,13 +267,15 @@
     <!-- Short description has to have less than 80 chars -->
     <string name="app_short_description">Ein einfacher Kalender mit Events, personalisierbaren Widgets ohne Werbung.</string>
     <string name="app_long_description">
-        Ein eigenständiger offline Kalender. Einfaches Erstellen wiederholender Events sowie Erinnerungen, inkl. optionaler Anzeige der Kalenderwochen.
+        Ein eigenständiger Kalender. Einfaches Erstellen wiederholender Events sowie Erinnerungen, inkl. optionaler Anzeige der Kalenderwochen.
 
         Enthält ein skalierbares 4x4 Widget, bei welchem die Schriftfarbe sowie die Hintergrundfarbe anpassbar sind.
         
         Dieser Kalender enthält weder Werbung noch unnötige App-Berechtigungen und ist vollständig Open Source.
 
         Berechtigung Speicher ist nur für das Importieren von .ics Termin-Dateien notwendig.
+
+        Internet and Contacts permissions are used only at Google sync.
 
         Diese App ist Teil einer grösseren Serie von Apps. Diese findet man unter http://www.simplemobiletools.com
     </string>

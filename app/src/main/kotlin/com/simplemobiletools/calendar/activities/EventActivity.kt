@@ -14,6 +14,7 @@ import com.simplemobiletools.calendar.dialogs.*
 import com.simplemobiletools.calendar.extensions.*
 import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.helpers.Formatter
+import com.simplemobiletools.calendar.models.CalDAVCalendar
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
 import com.simplemobiletools.commons.extensions.*
@@ -74,6 +75,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         updateStartTexts()
         updateEndTexts()
         updateEventType()
+        updateCalDAVCalendar()
 
         event_start_date.setOnClickListener { setupStartDate() }
         event_start_time.setOnClickListener { setupStartTime() }
@@ -313,12 +315,10 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         return days.trim().trimEnd(',')
     }
 
-    private fun getMonthlyRepetitionRuleText(): String {
-        return when (mRepeatRule) {
-            REPEAT_MONTH_SAME_DAY -> getString(R.string.the_same_day)
-            REPEAT_MONTH_LAST_DAY -> getString(R.string.the_last_day)
-            else -> getRepeatXthDayString(false)
-        }
+    private fun getMonthlyRepetitionRuleText() = when (mRepeatRule) {
+        REPEAT_MONTH_SAME_DAY -> getString(R.string.the_same_day)
+        REPEAT_MONTH_LAST_DAY -> getString(R.string.the_last_day)
+        else -> getRepeatXthDayString(false)
     }
 
     private fun showEventTypeDialog() {
@@ -382,6 +382,58 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         }
     }
 
+    private fun updateCalDAVCalendar() {
+        if (config.caldavSync) {
+            event_caldav_calendar_image.beVisible()
+            event_caldav_calendar_holder.beVisible()
+            event_caldav_calendar_divider.beVisible()
+
+            val calendars = CalDAVHandler(applicationContext).getCalDAVCalendars().filter {
+                it.canWrite() && config.getSyncedCalendarIdsAsList().contains(it.id.toString())
+            }
+            updateCurrentCalendarInfo(getCalendarWithId(calendars, getCalendarId()))
+
+            event_caldav_calendar_holder.setOnClickListener {
+                hideKeyboard()
+                SelectEventCalendarDialog(this, calendars, getCalendarId()) {
+                    config.lastUsedCaldavCalendar = it
+                    updateCurrentCalendarInfo(getCalendarWithId(calendars, it))
+                }
+            }
+        } else {
+            updateCurrentCalendarInfo(null)
+        }
+    }
+
+    private fun getCalendarId() = if (mEvent.source == SOURCE_SIMPLE_CALENDAR) config.lastUsedCaldavCalendar else mEvent.getCalDAVCalendarId()
+
+    private fun getCalendarWithId(calendars: List<CalDAVCalendar>, calendarId: Int): CalDAVCalendar? =
+            calendars.firstOrNull { it.id == calendarId }
+
+    private fun updateCurrentCalendarInfo(currentCalendar: CalDAVCalendar?) {
+        event_type_image.beVisibleIf(currentCalendar == null)
+        event_type_holder.beVisibleIf(currentCalendar == null)
+        event_caldav_calendar_divider.beVisibleIf(currentCalendar == null)
+        event_caldav_calendar_email.beGoneIf(currentCalendar == null)
+
+        if (currentCalendar == null) {
+            event_caldav_calendar_name.apply {
+                text = getString(R.string.store_locally_only)
+                apply {
+                    setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.medium_margin).toInt())
+                }
+            }
+        } else {
+            event_caldav_calendar_email.text = currentCalendar.accountName
+            event_caldav_calendar_name.apply {
+                text = currentCalendar.displayName
+                apply {
+                    setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.tiny_margin).toInt())
+                }
+            }
+        }
+    }
+
     private fun toggleAllDay(isChecked: Boolean) {
         hideKeyboard()
         event_start_time.beGoneIf(isChecked)
@@ -390,8 +442,8 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_event, menu)
-        menu.findItem(R.id.delete).isVisible = mEvent.id != 0
-        menu.findItem(R.id.share).isVisible = mEvent.id != 0
+        menu.findItem(R.id.delete).isVisible = mDialogTheme != 0 && mEvent.id != 0
+        menu.findItem(R.id.share).isVisible = mDialogTheme != 0 && mEvent.id != 0
         return true
     }
 
@@ -412,7 +464,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     private fun deleteEvent() {
         DeleteEventDialog(this, arrayListOf(mEvent.id)) {
             if (it) {
-                dbHelper.deleteEvents(arrayOf(mEvent.id.toString()))
+                dbHelper.deleteEvents(arrayOf(mEvent.id.toString()), true)
             } else {
                 dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS)
             }
@@ -437,9 +489,13 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         }
 
         val wasRepeatable = mEvent.repeatInterval > 0
+        val oldSource = mEvent.source
+        val newImportId = if (mEvent.id != 0) mEvent.importId else UUID.randomUUID().toString().replace("-", "") + System.currentTimeMillis().toString()
+
+        val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0) mEventTypeId else dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)!!.id
+        val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0) SOURCE_SIMPLE_CALENDAR else "$CALDAV-${config.lastUsedCaldavCalendar}"
 
         val reminders = sortedSetOf(mReminder1Minutes, mReminder2Minutes, mReminder3Minutes).filter { it != REMINDER_OFF }
-        val dbHelper = DBHelper.newInstance(applicationContext, this)
         val newDescription = event_description.value
         mEvent.apply {
             startTS = newStartTS
@@ -450,42 +506,65 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
             reminder2Minutes = reminders.elementAtOrElse(1) { REMINDER_OFF }
             reminder3Minutes = reminders.elementAtOrElse(2) { REMINDER_OFF }
             repeatInterval = mRepeatInterval
+            importId = newImportId
             flags = if (event_all_day.isChecked) (mEvent.flags or FLAG_ALL_DAY) else (mEvent.flags.removeFlag(FLAG_ALL_DAY))
             repeatLimit = if (repeatInterval == 0) 0 else mRepeatLimit
             repeatRule = mRepeatRule
-            eventType = mEventTypeId
+            eventType = newEventType
             offset = getCurrentOffset()
             isDstIncluded = TimeZone.getDefault().inDaylightTime(Date())
+            lastUpdated = System.currentTimeMillis()
+            source = newSource
         }
 
+        // recreate the event if it was moved in a different CalDAV calendar
+        if (mEvent.id != 0 && oldSource != newSource) {
+            dbHelper.deleteEvents(arrayOf(mEvent.id.toString()), true)
+            mEvent.id = 0
+        }
+
+        storeEvent(wasRepeatable)
+    }
+
+    private fun storeEvent(wasRepeatable: Boolean) {
         if (mEvent.id == 0) {
-            dbHelper.insert(mEvent) {
+            dbHelper.insert(mEvent, true) {
                 if (DateTime.now().isAfter(mEventStartDateTime.millis)) {
                     toast(R.string.past_event_added)
                 } else {
                     toast(R.string.event_added)
                 }
+
                 finish()
             }
         } else {
             if (mRepeatInterval > 0 && wasRepeatable) {
                 EditRepeatingEventDialog(this) {
                     if (it) {
-                        dbHelper.update(mEvent)
+                        dbHelper.update(mEvent, true) {
+                            eventUpdated()
+                        }
                     } else {
                         dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS)
                         mEvent.parentId = mEvent.id
                         mEvent.id = 0
-                        dbHelper.insert(mEvent) {
+                        dbHelper.insert(mEvent, true) {
                             toast(R.string.event_updated)
                             finish()
                         }
                     }
                 }
             } else {
-                dbHelper.update(mEvent)
+                dbHelper.update(mEvent, true) {
+                    eventUpdated()
+                }
             }
         }
+    }
+
+    private fun eventUpdated() {
+        toast(R.string.event_updated)
+        finish()
     }
 
     private fun updateStartTexts() {
@@ -525,7 +604,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     }
 
     @SuppressLint("NewApi")
-    fun setupStartDate() {
+    private fun setupStartDate() {
         hideKeyboard()
         config.backgroundColor.getContrastColor()
         val datepicker = DatePickerDialog(this, mDialogTheme, startDateSetListener, mEventStartDateTime.year, mEventStartDateTime.monthOfYear - 1,
@@ -538,13 +617,13 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         datepicker.show()
     }
 
-    fun setupStartTime() {
+    private fun setupStartTime() {
         hideKeyboard()
         TimePickerDialog(this, mDialogTheme, startTimeSetListener, mEventStartDateTime.hourOfDay, mEventStartDateTime.minuteOfHour, config.use24hourFormat).show()
     }
 
     @SuppressLint("NewApi")
-    fun setupEndDate() {
+    private fun setupEndDate() {
         hideKeyboard()
         val datepicker = DatePickerDialog(this, mDialogTheme, endDateSetListener, mEventEndDateTime.year, mEventEndDateTime.monthOfYear - 1,
                 mEventEndDateTime.dayOfMonth)
@@ -556,7 +635,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         datepicker.show()
     }
 
-    fun setupEndTime() {
+    private fun setupEndTime() {
         hideKeyboard()
         TimePickerDialog(this, mDialogTheme, endTimeSetListener, mEventEndDateTime.hourOfDay, mEventEndDateTime.minuteOfHour, config.use24hourFormat).show()
     }
@@ -622,21 +701,15 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         event_repetition_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
         event_reminder_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
         event_type_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
+        event_caldav_calendar_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
     }
 
     override fun eventInserted(event: Event) {
-
-    }
-
-    override fun eventUpdated(event: Event) {
-        toast(R.string.event_updated)
-        finish()
     }
 
     override fun eventsDeleted(cnt: Int) {
     }
 
     override fun gotEvents(events: MutableList<Event>) {
-
     }
 }

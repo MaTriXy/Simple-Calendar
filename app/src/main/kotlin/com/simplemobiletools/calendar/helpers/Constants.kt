@@ -12,6 +12,7 @@ val EVENT_OCCURRENCE_TS = "event_occurrence_ts"
 val NEW_EVENT_START_TS = "new_event_start_ts"
 val WEEK_START_TIMESTAMP = "week_start_timestamp"
 val NEW_EVENT_SET_HOUR_DURATION = "new_event_set_hour_duration"
+val CALDAV = "Caldav"
 
 val MONTHLY_VIEW = 1
 val YEARLY_VIEW = 2
@@ -40,8 +41,10 @@ val REMINDER_SOUND = "reminder_sound"
 val VIEW = "view"
 val REMINDER_MINUTES = "reminder_minutes"
 val DISPLAY_EVENT_TYPES = "display_event_types"
-val GOOGLE_SYNC = "google_sync"
-val SYNC_ACCOUNT_NAME = "sync_account_name"
+val FONT_SIZE = "font_size"
+val CALDAV_SYNC = "caldav_sync"
+val CALDAV_SYNCED_CALENDAR_IDS = "caldav_synced_calendar_ids"
+val LAST_USED_CALDAV_CALENDAR = "last_used_caldav_calendar"
 val SNOOZE_DELAY = "snooze_delay"
 val DISPLAY_PAST_EVENTS = "display_past_events"
 
@@ -75,6 +78,7 @@ val BEGIN_ALARM = "BEGIN:VALARM"
 val END_ALARM = "END:VALARM"
 val DTSTART = "DTSTART"
 val DTEND = "DTEND"
+val LAST_MODIFIED = "LAST-MODIFIED"
 val DURATION = "DURATION:"
 val SUMMARY = "SUMMARY"
 val DESCRIPTION = "DESCRIPTION:"
@@ -109,3 +113,11 @@ val TH = "TH"
 val FR = "FR"
 val SA = "SA"
 val SU = "SU"
+
+// font sizes
+val FONT_SIZE_SMALL = 0
+val FONT_SIZE_MEDIUM = 1
+val FONT_SIZE_LARGE = 2
+
+val SOURCE_SIMPLE_CALENDAR = "simple-calendar"
+val SOURCE_IMPORTED_ICS = "imported-ics"

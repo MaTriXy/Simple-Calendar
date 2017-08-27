@@ -14,27 +14,27 @@ import com.simplemobiletools.commons.extensions.hideKeyboard
 import com.simplemobiletools.commons.extensions.setBackgroundWithStroke
 import com.simplemobiletools.commons.extensions.setupDialogStuff
 import com.simplemobiletools.commons.extensions.updateTextColors
-import kotlinx.android.synthetic.main.dialog_select_event_type.view.*
+import kotlinx.android.synthetic.main.dialog_select_radio_group.view.*
 import kotlinx.android.synthetic.main.radio_button_with_color.view.*
 import java.util.*
 
 class SelectEventTypeDialog(val activity: Activity, val currEventType: Int, val callback: (checkedId: Int) -> Unit) {
-    val NEW_TYPE_ID = -2
+    private val NEW_TYPE_ID = -2
 
-    val dialog: AlertDialog?
-    val radioGroup: RadioGroup
-    var wasInit = false
-    var eventTypes = ArrayList<EventType>()
+    private val dialog: AlertDialog?
+    private val radioGroup: RadioGroup
+    private var wasInit = false
+    private var eventTypes = ArrayList<EventType>()
 
     init {
-        val view = activity.layoutInflater.inflate(R.layout.dialog_select_event_type, null) as ViewGroup
+        val view = activity.layoutInflater.inflate(R.layout.dialog_select_radio_group, null) as ViewGroup
         radioGroup = view.dialog_radio_group
 
         activity.dbHelper.getEventTypes {
             eventTypes = it
             activity.runOnUiThread {
-                eventTypes.forEach {
-                    addRadioButton(it.title, it.id, it.color)
+                eventTypes.filter { it.caldavCalendarId == 0 }.forEach {
+                    addRadioButton(it.getDisplayTitle(), it.id, it.color)
                 }
                 addRadioButton(activity.getString(R.string.add_new_type), NEW_TYPE_ID, Color.TRANSPARENT)
                 wasInit = true
@@ -63,12 +63,12 @@ class SelectEventTypeDialog(val activity: Activity, val currEventType: Int, val 
         radioGroup.addView(view, RadioGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    fun viewClicked(typeId: Int) {
+    private fun viewClicked(typeId: Int) {
         if (!wasInit)
             return
 
         if (typeId == NEW_TYPE_ID) {
-            NewEventTypeDialog(activity) {
+            UpdateEventTypeDialog(activity) {
                 callback.invoke(it)
                 activity.hideKeyboard()
                 dialog?.dismiss()

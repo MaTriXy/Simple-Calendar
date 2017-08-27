@@ -16,6 +16,7 @@ import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.models.ListEvent
 import com.simplemobiletools.calendar.models.ListItem
 import com.simplemobiletools.calendar.models.ListSection
+import com.simplemobiletools.commons.extensions.getColoredIcon
 import org.joda.time.DateTime
 import java.util.*
 
@@ -23,8 +24,9 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
     val ITEM_EVENT = 0
     val ITEM_HEADER = 1
 
-    var events: List<ListItem> = ArrayList()
-    val textColor: Int = context.config.widgetTextColor
+    var events = ArrayList<ListItem>()
+    val textColor = context.config.widgetTextColor
+    var mediumFontSize = context.config.getFontSize()
     var todayDate = ""
     val allDayString = context.resources.getString(R.string.all_day)
 
@@ -38,6 +40,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
                 setTextViewText(R.id.event_item_title, item.title)
                 setTextViewText(R.id.event_item_description, item.description)
                 setTextViewText(R.id.event_item_start, if (item.isAllDay) allDayString else Formatter.getTimeFromTS(context, item.startTS))
+                setImageViewBitmap(R.id.event_item_color, context.resources.getColoredIcon(textColor, R.drawable.monthly_event_dot))
 
                 if (item.startTS == item.endTS) {
                     setViewVisibility(R.id.event_item_end, View.INVISIBLE)
@@ -64,6 +67,11 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
                 setInt(R.id.event_item_start, "setTextColor", textColor)
                 setInt(R.id.event_item_end, "setTextColor", textColor)
 
+                setFloat(R.id.event_item_title, "setTextSize", mediumFontSize)
+                setFloat(R.id.event_item_description, "setTextSize", mediumFontSize)
+                setFloat(R.id.event_item_start, "setTextSize", mediumFontSize)
+                setFloat(R.id.event_item_end, "setTextSize", mediumFontSize)
+
                 Intent().apply {
                     putExtra(EVENT_ID, item.id)
                     putExtra(EVENT_OCCURRENCE_TS, item.startTS)
@@ -74,6 +82,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
             val item = events[position] as ListSection
             remoteView = RemoteViews(context.packageName, R.layout.event_list_section_widget).apply {
                 setInt(R.id.event_item_title, "setTextColor", textColor)
+                setFloat(R.id.event_item_title, "setTextSize", mediumFontSize)
                 setTextViewText(R.id.event_item_title, item.title)
             }
         }
@@ -96,6 +105,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
     override fun getItemId(position: Int) = position.toLong()
 
     override fun onDataSetChanged() {
+        mediumFontSize = context.config.getFontSize()
         val fromTS = DateTime().seconds()
         val toTS = DateTime().plusYears(1).seconds()
         context.dbHelper.getEventsInBackground(fromTS, toTS) {
@@ -111,7 +121,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
                         listItems.add(ListSection(day))
                     prevCode = code
                 }
-                listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.isAllDay))
+                listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.getIsAllDay(), it.color))
             }
 
             this@EventListWidgetAdapter.events = listItems

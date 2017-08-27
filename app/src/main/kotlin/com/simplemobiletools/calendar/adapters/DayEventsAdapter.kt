@@ -1,5 +1,7 @@
 package com.simplemobiletools.calendar.adapters
 
+import android.graphics.Color
+import android.graphics.PorterDuff
 import android.support.v7.view.ActionMode
 import android.support.v7.widget.RecyclerView
 import android.view.*
@@ -47,7 +49,7 @@ class DayEventsAdapter(val activity: SimpleActivity, val mItems: List<Event>, va
         allDayString = activity.resources.getString(R.string.all_day)
     }
 
-    val multiSelectorMode = object : ModalMultiSelectorCallback(multiSelector) {
+    private val multiSelectorMode = object : ModalMultiSelectorCallback(multiSelector) {
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
             when (item.itemId) {
                 R.id.cab_share -> shareEvents()
@@ -115,12 +117,13 @@ class DayEventsAdapter(val activity: SimpleActivity, val mItems: List<Event>, va
 
     class ViewHolder(val activity: SimpleActivity, view: View, val itemClick: (Event) -> (Unit)) : SwappingHolder(view, MultiSelector()) {
         fun bindView(multiSelectorCallback: ModalMultiSelectorCallback, multiSelector: MultiSelector, event: Event, pos: Int): View {
-
             itemView.apply {
                 event_item_title.text = event.title
                 event_item_description.text = event.description
-                event_item_start.text = if (event.isAllDay) allDayString else Formatter.getTimeFromTS(context, event.startTS)
+                event_item_start.text = if (event.getIsAllDay()) allDayString else Formatter.getTimeFromTS(context, event.startTS)
                 event_item_end.beInvisibleIf(event.startTS == event.endTS)
+                event_item_color.setColorFilter(event.color, PorterDuff.Mode.SRC_IN)
+
                 toggleItemSelection(this, markedItems.contains(pos), pos)
 
                 if (event.startTS != event.endTS) {
@@ -130,12 +133,12 @@ class DayEventsAdapter(val activity: SimpleActivity, val mItems: List<Event>, va
                     event_item_end.apply {
                         text = Formatter.getTimeFromTS(context, event.endTS)
                         if (startCode != endCode) {
-                            if (event.isAllDay) {
+                            if (event.getIsAllDay()) {
                                 text = Formatter.getDateFromCode(context, endCode, true)
                             } else {
                                 append(" (${Formatter.getDateFromCode(context, endCode, true)})")
                             }
-                        } else if (event.isAllDay) {
+                        } else if (event.getIsAllDay()) {
                             beInvisible()
                         }
                     }
@@ -162,7 +165,7 @@ class DayEventsAdapter(val activity: SimpleActivity, val mItems: List<Event>, va
             return itemView
         }
 
-        fun viewClicked(multiSelector: MultiSelector, event: Event, pos: Int) {
+        private fun viewClicked(multiSelector: MultiSelector, event: Event, pos: Int) {
             if (multiSelector.isSelectable) {
                 val isSelected = multiSelector.selectedPositions.contains(layoutPosition)
                 multiSelector.setSelected(this, !isSelected)

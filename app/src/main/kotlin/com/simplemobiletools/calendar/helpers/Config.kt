@@ -3,6 +3,8 @@ package com.simplemobiletools.calendar.helpers
 import android.content.Context
 import android.media.RingtoneManager
 import android.text.format.DateFormat
+import com.simplemobiletools.calendar.R
+import com.simplemobiletools.calendar.extensions.scheduleCalDAVSync
 import com.simplemobiletools.commons.helpers.BaseConfig
 import java.util.*
 
@@ -65,13 +67,26 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getStringSet(DISPLAY_EVENT_TYPES, HashSet<String>())
         set(displayEventTypes) = prefs.edit().remove(DISPLAY_EVENT_TYPES).putStringSet(DISPLAY_EVENT_TYPES, displayEventTypes).apply()
 
-    var googleSync: Boolean
-        get() = prefs.getBoolean(GOOGLE_SYNC, false)
-        set(googleSync) = prefs.edit().putBoolean(GOOGLE_SYNC, googleSync).apply()
+    var fontSize: Int
+        get() = prefs.getInt(FONT_SIZE, FONT_SIZE_MEDIUM)
+        set(size) = prefs.edit().putInt(FONT_SIZE, size).apply()
 
-    var syncAccountName: String
-        get() = prefs.getString(SYNC_ACCOUNT_NAME, "")
-        set(syncAccountName) = prefs.edit().putString(SYNC_ACCOUNT_NAME, syncAccountName).apply()
+    var caldavSync: Boolean
+        get() = prefs.getBoolean(CALDAV_SYNC, false)
+        set(caldavSync) {
+            context.scheduleCalDAVSync(caldavSync)
+            prefs.edit().putBoolean(CALDAV_SYNC, caldavSync).apply()
+        }
+
+    var caldavSyncedCalendarIDs: String
+        get() = prefs.getString(CALDAV_SYNCED_CALENDAR_IDS, "")
+        set(calendarIDs) = prefs.edit().putString(CALDAV_SYNCED_CALENDAR_IDS, calendarIDs).apply()
+
+    var lastUsedCaldavCalendar: Int
+        get() = prefs.getInt(LAST_USED_CALDAV_CALENDAR, getSyncedCalendarIdsAsList().first().toInt())
+        set(calendarId) = prefs.edit().putInt(LAST_USED_CALDAV_CALENDAR, calendarId).apply()
+
+    fun getSyncedCalendarIdsAsList() = caldavSyncedCalendarIDs.split(",").filter { it.trim().isNotEmpty() } as ArrayList<String>
 
     fun addDisplayEventType(type: String) {
         addDisplayEventTypes(HashSet<String>(Arrays.asList(type)))
@@ -96,4 +111,14 @@ class Config(context: Context) : BaseConfig(context) {
             return ""
         }
     }
+
+    fun getFontSize() = when (fontSize) {
+        FONT_SIZE_SMALL -> getSmallFontSize()
+        FONT_SIZE_MEDIUM -> getMediumFontSize()
+        else -> getLargeFontSize()
+    }
+
+    fun getSmallFontSize() = getMediumFontSize() - 3f
+    fun getMediumFontSize() = context.resources.getDimension(R.dimen.day_text_size) / context.resources.displayMetrics.density
+    fun getLargeFontSize() = getMediumFontSize() + 3f
 }

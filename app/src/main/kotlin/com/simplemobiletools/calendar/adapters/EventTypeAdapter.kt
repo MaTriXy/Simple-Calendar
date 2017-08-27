@@ -9,6 +9,7 @@ import com.bignerdranch.android.multiselector.SwappingHolder
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.extensions.config
+import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.interfaces.DeleteEventTypesListener
 import com.simplemobiletools.calendar.models.EventType
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
@@ -43,7 +44,7 @@ class EventTypeAdapter(val activity: SimpleActivity, val mItems: List<EventType>
         textColor = activity.config.textColor
     }
 
-    val multiSelectorMode = object : ModalMultiSelectorCallback(multiSelector) {
+    private val multiSelectorMode = object : ModalMultiSelectorCallback(multiSelector) {
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
             when (item.itemId) {
                 R.id.cab_delete -> askConfirmDelete()
@@ -69,24 +70,30 @@ class EventTypeAdapter(val activity: SimpleActivity, val mItems: List<EventType>
     }
 
     private fun askConfirmDelete() {
-        val MOVE_EVENTS = 0
-        val DELETE_EVENTS = 1
-        val res = activity.resources
-        val items = ArrayList<RadioItem>().apply {
-            add(RadioItem(MOVE_EVENTS, res.getString(R.string.move_events_into_default)))
-            add(RadioItem(DELETE_EVENTS, res.getString(R.string.remove_affected_events)))
-        }
-        RadioGroupDialog(activity, items, -1) {
-            actMode?.finish()
-            deleteEventTypes(it == DELETE_EVENTS)
+        val selections = multiSelector.selectedPositions
+        val eventTypes = ArrayList<EventType>(selections.size)
+        selections.forEach { eventTypes.add(mItems[it]) }
+
+        if (activity.dbHelper.doEventTypesContainEvent(eventTypes)) {
+            val MOVE_EVENTS = 0
+            val DELETE_EVENTS = 1
+            val res = activity.resources
+            val items = ArrayList<RadioItem>().apply {
+                add(RadioItem(MOVE_EVENTS, res.getString(R.string.move_events_into_default)))
+                add(RadioItem(DELETE_EVENTS, res.getString(R.string.remove_affected_events)))
+            }
+            RadioGroupDialog(activity, items, -1) {
+                actMode?.finish()
+                deleteEventTypes(it == DELETE_EVENTS, eventTypes)
+            }
+        } else {
+            deleteEventTypes(true, eventTypes)
         }
     }
 
-    private fun deleteEventTypes(deleteEvents: Boolean) {
-        val selections = multiSelector.selectedPositions
-        val ids = ArrayList<Int>(selections.size)
-        selections.forEach { ids.add((mItems[it]).id) }
-        listener?.deleteEventTypes(ids, deleteEvents)
+    private fun deleteEventTypes(deleteEvents: Boolean, eventTypes: ArrayList<EventType>) {
+        listener?.deleteEventTypes(eventTypes, deleteEvents)
+        actMode?.finish()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup?, viewType: Int): ViewHolder {
@@ -104,7 +111,7 @@ class EventTypeAdapter(val activity: SimpleActivity, val mItems: List<EventType>
         fun bindView(multiSelectorCallback: ModalMultiSelectorCallback, multiSelector: MultiSelector, eventType: EventType, pos: Int): View {
 
             itemView.apply {
-                event_type_title.text = eventType.title
+                event_type_title.text = eventType.getDisplayTitle()
                 event_type_color.setBackgroundWithStroke(eventType.color, activity.config.backgroundColor)
                 toggleItemSelection(this, markedItems.contains(pos), pos)
 
@@ -126,7 +133,7 @@ class EventTypeAdapter(val activity: SimpleActivity, val mItems: List<EventType>
             return itemView
         }
 
-        fun viewClicked(multiSelector: MultiSelector, eventType: EventType, pos: Int) {
+        private fun viewClicked(multiSelector: MultiSelector, eventType: EventType, pos: Int) {
             if (multiSelector.isSelectable) {
                 val isSelected = multiSelector.selectedPositions.contains(layoutPosition)
                 multiSelector.setSelected(this, !isSelected)
