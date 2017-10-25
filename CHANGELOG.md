@@ -1,6 +1,77 @@
 Changelog
 ==========
 
+Version 2.9.0 *(2017-10-21)*
+----------------------------
+
+ * Added a Location field
+ * Allow adding Contact birthdays
+ * Rewrote the widgets, making them more reliable
+ * After opening the app from widget and pressing Back, go to the main screen
+ * Many other performance and stability improvements
+
+Version 2.8.2 *(2017-10-14)*
+----------------------------
+
+ * Increasing the monthly widget font size
+ * Couple smaller improvements to monthly widget
+
+Version 2.8.1 *(2017-10-09)*
+----------------------------
+
+ * Adding a crashfix
+
+Version 2.8.0 *(2017-10-08)*
+----------------------------
+
+ * Reworked the monthly view layout
+ * Misc performance/ux improvements
+
+Version 2.7.6 *(2017-09-24)*
+----------------------------
+
+ * Add support for events repeating every 30 days
+ * Fix event type color at the Event list widget
+ * Fix a glitch at wrongly displayed events lasting through midnight
+ * Update events imported via .ics files, check last-modified field
+
+Version 2.7.5 *(2017-09-10)*
+----------------------------
+
+ * Fixed some CalDAV sync issues
+ * Use the next full hour as the default event time, not 13:00 the next day
+ * Color the days in yearly view based on event types
+ * Allow displaying past events in the event list widget
+ * Make sure the Save and Delete buttons have the highest priority at the actionmenu
+
+Version 2.7.4 *(2017-09-02)*
+----------------------------
+
+ * Fixed importing .ics files
+ * Made errors at importing events more verbose
+
+Version 2.7.3 *(2017-08-29)*
+----------------------------
+
+ * Adding some crashfixes
+
+Version 2.7.2 *(2017-08-28)*
+----------------------------
+
+ * Misc minor improvements and crashfixes
+
+Version 2.7.1 *(2017-08-28)*
+----------------------------
+
+ * Adding minor crashfixes
+
+Version 2.7.0 *(2017-08-27)*
+----------------------------
+
+ * Replaced Google Sync with CalDAV sync, please check Settings for enabling it
+ * Improved Tablet support
+ * Added colored dots marking event types at multiple views
+
 Version 2.6.1 *(2017-07-30)*
 ----------------------------
 
@@ -511,4 +582,3 @@ Version 1.0 *(2016-06-05)*
 ----------------------------
 
  * Initial release
-

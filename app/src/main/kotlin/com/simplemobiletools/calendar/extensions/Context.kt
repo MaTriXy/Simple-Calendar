@@ -1,6 +1,5 @@
 package com.simplemobiletools.calendar.extensions
 
-import android.Manifest
 import android.annotation.TargetApi
 import android.app.AlarmManager
 import android.app.Notification
@@ -10,29 +9,31 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.net.Uri
 import android.os.Build
-import android.support.v4.content.ContextCompat
 import android.support.v7.app.NotificationCompat
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.activities.EventActivity
 import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.helpers.Formatter
+import com.simplemobiletools.calendar.models.DayMonthly
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.receivers.CalDAVSyncReceiver
 import com.simplemobiletools.calendar.receivers.NotificationReceiver
 import com.simplemobiletools.calendar.services.SnoozeService
-import com.simplemobiletools.commons.extensions.getContrastColor
-import com.simplemobiletools.commons.extensions.isKitkatPlus
-import com.simplemobiletools.commons.extensions.isLollipopPlus
+import com.simplemobiletools.commons.extensions.*
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import java.text.SimpleDateFormat
 import java.util.*
-
-fun Context.hasCalendarPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
 fun Context.updateWidgets() {
     val widgetsCnt = AppWidgetManager.getInstance(this).getAppWidgetIds(ComponentName(this, MyWidgetMonthlyProvider::class.java))
@@ -88,11 +89,6 @@ fun Context.scheduleNextEventReminder(event: Event, dbHelper: DBHelper) {
     }
 }
 
-fun Context.scheduleReminder(event: Event, dbHelper: DBHelper) {
-    if (event.getReminders().isNotEmpty())
-        scheduleNextEventReminder(event, dbHelper)
-}
-
 fun Context.scheduleEventIn(notifTS: Long, event: Event) {
     if (notifTS < System.currentTimeMillis())
         return
@@ -126,39 +122,35 @@ fun Context.getFormattedMinutes(minutes: Int, showBefore: Boolean = true) = when
     else -> {
         if (minutes % 525600 == 0)
             resources.getQuantityString(R.plurals.years, minutes / 525600, minutes / 525600)
-        if (minutes % 43200 == 0)
-            resources.getQuantityString(R.plurals.months, minutes / 43200, minutes / 43200)
-        else if (minutes % 10080 == 0)
-            resources.getQuantityString(R.plurals.weeks, minutes / 10080, minutes / 10080)
-        else if (minutes % 1440 == 0)
-            resources.getQuantityString(R.plurals.days, minutes / 1440, minutes / 1440)
-        else if (minutes % 60 == 0) {
-            val base = if (showBefore) R.plurals.hours_before else R.plurals.by_hours
-            resources.getQuantityString(base, minutes / 60, minutes / 60)
-        } else {
-            val base = if (showBefore) R.plurals.minutes_before else R.plurals.by_minutes
-            resources.getQuantityString(base, minutes, minutes)
+
+        when {
+            minutes % 43200 == 0 -> resources.getQuantityString(R.plurals.months, minutes / 43200, minutes / 43200)
+            minutes % 10080 == 0 -> resources.getQuantityString(R.plurals.weeks, minutes / 10080, minutes / 10080)
+            minutes % 1440 == 0 -> resources.getQuantityString(R.plurals.days, minutes / 1440, minutes / 1440)
+            minutes % 60 == 0 -> {
+                val base = if (showBefore) R.plurals.hours_before else R.plurals.by_hours
+                resources.getQuantityString(base, minutes / 60, minutes / 60)
+            }
+            else -> {
+                val base = if (showBefore) R.plurals.minutes_before else R.plurals.by_minutes
+                resources.getQuantityString(base, minutes, minutes)
+            }
         }
     }
 }
 
-fun Context.getRepetitionText(seconds: Int): String {
-    val days = seconds / 60 / 60 / 24
-    return when (days) {
-        0 -> getString(R.string.no_repetition)
-        1 -> getString(R.string.daily)
-        7 -> getString(R.string.weekly)
-        30 -> getString(R.string.monthly)
-        365 -> getString(R.string.yearly)
-        else -> {
-            if (days % 365 == 0)
-                resources.getQuantityString(R.plurals.years, days / 365, days / 365)
-            else if (days % 30 == 0)
-                resources.getQuantityString(R.plurals.months, days / 30, days / 30)
-            else if (days % 7 == 0)
-                resources.getQuantityString(R.plurals.weeks, days / 7, days / 7)
-            else
-                resources.getQuantityString(R.plurals.days, days, days)
+fun Context.getRepetitionText(seconds: Int) = when (seconds) {
+    0 -> getString(R.string.no_repetition)
+    DAY -> getString(R.string.daily)
+    WEEK -> getString(R.string.weekly)
+    MONTH -> getString(R.string.monthly)
+    YEAR -> getString(R.string.yearly)
+    else -> {
+        when {
+            seconds % YEAR == 0 -> resources.getQuantityString(R.plurals.years, seconds / YEAR, seconds / YEAR)
+            seconds % MONTH == 0 -> resources.getQuantityString(R.plurals.months, seconds / MONTH, seconds / MONTH)
+            seconds % WEEK == 0 -> resources.getQuantityString(R.plurals.weeks, seconds / WEEK, seconds / WEEK)
+            else -> resources.getQuantityString(R.plurals.days, seconds / DAY, seconds / DAY)
         }
     }
 }
@@ -177,7 +169,8 @@ fun Context.notifyEvent(event: Event) {
     val startTime = Formatter.getTimeFromTS(this, event.startTS)
     val endTime = Formatter.getTimeFromTS(this, event.endTS)
     val timeRange = if (event.getIsAllDay()) getString(R.string.all_day) else getFormattedEventTime(startTime, endTime)
-    val notification = getNotification(this, pendingIntent, event, "$timeRange ${event.description}")
+    val descriptionOrLocation = if (config.replaceDescription) event.location else event.description
+    val notification = getNotification(this, pendingIntent, event, "$timeRange $descriptionOrLocation")
     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.notify(event.id, notification)
 }
@@ -221,25 +214,31 @@ private fun getSnoozePendingIntent(context: Context, event: Event): PendingInten
     return PendingIntent.getService(context, event.id, intent, PendingIntent.FLAG_UPDATE_CURRENT)
 }
 
-fun Context.launchNewEventIntent(startNewTask: Boolean = false, today: Boolean = false) {
-    val code = Formatter.getDayCodeFromDateTime(DateTime(DateTimeZone.getDefault()).plusDays(if (today) 0 else 1))
+fun Context.launchNewEventIntent() {
+    val code = Formatter.getDayCodeFromDateTime(DateTime(DateTimeZone.getDefault()))
     Intent(applicationContext, EventActivity::class.java).apply {
         putExtra(NEW_EVENT_START_TS, getNewEventTimestampFromCode(code))
-        if (startNewTask)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(this)
     }
 }
 
-fun Context.getNewEventTimestampFromCode(dayCode: String) = Formatter.getLocalDateTimeFromCode(dayCode).withTime(13, 0, 0, 0).seconds()
+fun Context.getNewEventTimestampFromCode(dayCode: String): Int {
+    val currHour = DateTime(System.currentTimeMillis(), DateTimeZone.getDefault()).hourOfDay
+    val dateTime = Formatter.getLocalDateTimeFromCode(dayCode).withHourOfDay(currHour)
+    return dateTime.plusHours(1).withMinuteOfHour(0).withSecondOfMinute(0).withMillisOfSecond(0).seconds()
+}
 
 fun Context.getCurrentOffset() = SimpleDateFormat("Z", Locale.getDefault()).format(Date())
 
-fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(this).getCalDAVCalendars(config.caldavSyncedCalendarIDs)
+fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(this).getCalDAVCalendars(null, config.caldavSyncedCalendarIDs)
 
 fun Context.recheckCalDAVCalendars(callback: () -> Unit) {
     if (config.caldavSync) {
-        CalDAVHandler(this).refreshCalendars(callback)
+        Thread({
+            CalDAVHandler(this).refreshCalendars(null, callback)
+            updateWidgets()
+        }).start()
     }
 }
 
@@ -259,3 +258,60 @@ fun Context.scheduleCalDAVSync(activate: Boolean) {
 val Context.config: Config get() = Config.newInstance(this)
 
 val Context.dbHelper: DBHelper get() = DBHelper.newInstance(this)
+
+fun Context.addDayNumber(rawTextColor: Int, day: DayMonthly, linearLayout: LinearLayout, dayLabelHeight: Int, callback: (Int) -> Unit) {
+    var textColor = rawTextColor
+    if (!day.isThisMonth)
+        textColor = textColor.adjustAlpha(LOW_ALPHA)
+
+    (View.inflate(this, R.layout.day_monthly_number_view, null) as TextView).apply {
+        setTextColor(textColor)
+        text = day.value.toString()
+        gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        linearLayout.addView(this)
+
+        if (day.isToday) {
+            val primaryColor = config.primaryColor
+            setTextColor(config.primaryColor.getContrastColor().adjustAlpha(MEDIUM_ALPHA))
+            if (dayLabelHeight == 0) {
+                onGlobalLayout {
+                    val height = this@apply.height
+                    if (height > 0) {
+                        callback(height)
+                        addTodaysBackground(this, resources, height, primaryColor)
+                    }
+                }
+            } else {
+                addTodaysBackground(this, resources, dayLabelHeight, primaryColor)
+            }
+        }
+    }
+}
+
+private fun addTodaysBackground(textView: TextView, res: Resources, dayLabelHeight: Int, mPrimaryColor: Int) =
+        textView.addResizedBackgroundDrawable(res, dayLabelHeight, mPrimaryColor, R.drawable.monthly_today_circle)
+
+fun Context.addDayEvents(day: DayMonthly, linearLayout: LinearLayout, res: Resources, dividerMargin: Int) {
+    day.dayEvents.forEach {
+        val backgroundDrawable = res.getDrawable(R.drawable.day_monthly_event_background)
+        backgroundDrawable.mutate().setColorFilter(it.color, PorterDuff.Mode.SRC_IN)
+
+        val eventLayoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        eventLayoutParams.setMargins(dividerMargin, 0, dividerMargin, dividerMargin)
+
+        var textColor = it.color.getContrastColor().adjustAlpha(MEDIUM_ALPHA)
+        if (!day.isThisMonth) {
+            backgroundDrawable.alpha = 64
+            textColor = textColor.adjustAlpha(0.25f)
+        }
+
+        (View.inflate(this, R.layout.day_monthly_event_view, null) as TextView).apply {
+            setTextColor(textColor)
+            text = it.title.replace(" ", "\u00A0")  // allow word break by char
+            background = backgroundDrawable
+            layoutParams = eventLayoutParams
+            linearLayout.addView(this)
+        }
+    }
+}

@@ -1,14 +1,11 @@
 package com.simplemobiletools.calendar.activities
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Parcelable
-import android.support.v4.app.ActivityCompat
 import android.text.TextUtils
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.dialogs.CustomEventReminderDialog
@@ -25,12 +22,12 @@ import com.simplemobiletools.commons.extensions.beGone
 import com.simplemobiletools.commons.extensions.beVisibleIf
 import com.simplemobiletools.commons.extensions.toast
 import com.simplemobiletools.commons.extensions.updateTextColors
+import com.simplemobiletools.commons.helpers.PERMISSION_WRITE_CALENDAR
 import com.simplemobiletools.commons.models.RadioItem
 import kotlinx.android.synthetic.main.activity_settings.*
 
 class SettingsActivity : SimpleActivity() {
     private val GET_RINGTONE_URI = 1
-    private val CALENDAR_PERMISSION = 5
 
     lateinit var res: Resources
     private var mStoredPrimaryColor = 0
@@ -39,6 +36,7 @@ class SettingsActivity : SimpleActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
         res = resources
+        mStoredPrimaryColor = config.primaryColor
         setupCaldavSync()
     }
 
@@ -49,6 +47,7 @@ class SettingsActivity : SimpleActivity() {
         setupManageEventTypes()
         setupHourFormat()
         setupSundayFirst()
+        setupReplaceDescription()
         setupWeekNumbers()
         setupWeeklyStart()
         setupWeeklyEnd()
@@ -105,10 +104,10 @@ class SettingsActivity : SimpleActivity() {
             if (config.caldavSync) {
                 toggleCaldavSync(false)
             } else {
-                if (hasCalendarPermission()) {
-                    toggleCaldavSync(true)
-                } else {
-                    ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_CALENDAR), CALENDAR_PERMISSION)
+                handlePermission(PERMISSION_WRITE_CALENDAR) {
+                    if (it) {
+                        toggleCaldavSync(true)
+                    }
                 }
             }
         }
@@ -141,6 +140,7 @@ class SettingsActivity : SimpleActivity() {
             settings_manage_synced_calendars_holder.beVisibleIf(newCalendarIds.isNotEmpty())
             settings_caldav_sync.isChecked = newCalendarIds.isNotEmpty()
             config.caldavSync = newCalendarIds.isNotEmpty()
+            toast(R.string.syncing)
 
             Thread({
                 if (newCalendarIds.isNotEmpty()) {
@@ -153,7 +153,7 @@ class SettingsActivity : SimpleActivity() {
                             dbHelper.insertEventType(eventType)
                         }
                     }
-                    CalDAVHandler(applicationContext).refreshCalendars {}
+                    CalDAVHandler(applicationContext).refreshCalendars(this) {}
                 }
 
                 val removedCalendarIds = oldCalendarIds.filter { !newCalendarIds.contains(it) }
@@ -164,6 +164,7 @@ class SettingsActivity : SimpleActivity() {
                     }
                 }
                 dbHelper.deleteEventTypesWithCalendarId(TextUtils.join(",", removedCalendarIds))
+                toast(R.string.synchronization_completed)
             }).start()
         }
     }
@@ -173,6 +174,14 @@ class SettingsActivity : SimpleActivity() {
         settings_sunday_first_holder.setOnClickListener {
             settings_sunday_first.toggle()
             config.isSundayFirst = settings_sunday_first.isChecked
+        }
+    }
+
+    private fun setupReplaceDescription() {
+        settings_replace_description.isChecked = config.replaceDescription
+        settings_replace_description_holder.setOnClickListener {
+            settings_replace_description.toggle()
+            config.replaceDescription = settings_replace_description.isChecked
         }
     }
 
@@ -338,16 +347,6 @@ class SettingsActivity : SimpleActivity() {
                     settings_reminder_sound.text = RingtoneManager.getRingtone(this, uri as Uri)?.getTitle(this)
                     config.reminderSound = uri.toString()
                 }
-            }
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == CALENDAR_PERMISSION) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                toggleCaldavSync(true)
             }
         }
     }

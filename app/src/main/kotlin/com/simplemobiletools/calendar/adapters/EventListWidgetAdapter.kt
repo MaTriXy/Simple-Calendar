@@ -21,14 +21,15 @@ import org.joda.time.DateTime
 import java.util.*
 
 class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteViewsService.RemoteViewsFactory {
-    val ITEM_EVENT = 0
-    val ITEM_HEADER = 1
+    private val ITEM_EVENT = 0
+    private val ITEM_HEADER = 1
 
-    var events = ArrayList<ListItem>()
-    val textColor = context.config.widgetTextColor
-    var mediumFontSize = context.config.getFontSize()
-    var todayDate = ""
-    val allDayString = context.resources.getString(R.string.all_day)
+    private val allDayString = context.resources.getString(R.string.all_day)
+    private var events = ArrayList<ListItem>()
+    private val textColor = context.config.widgetTextColor
+    private val replaceDescription = context.config.replaceDescription
+    private var mediumFontSize = context.config.getFontSize()
+    private var todayDate = ""
 
     override fun getViewAt(position: Int): RemoteViews? {
         val type = getItemViewType(position)
@@ -38,9 +39,9 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
             val item = events[position] as ListEvent
             remoteView = RemoteViews(context.packageName, R.layout.event_list_item_widget).apply {
                 setTextViewText(R.id.event_item_title, item.title)
-                setTextViewText(R.id.event_item_description, item.description)
+                setTextViewText(R.id.event_item_description, if (replaceDescription) item.location else item.description)
                 setTextViewText(R.id.event_item_start, if (item.isAllDay) allDayString else Formatter.getTimeFromTS(context, item.startTS))
-                setImageViewBitmap(R.id.event_item_color, context.resources.getColoredIcon(textColor, R.drawable.monthly_event_dot))
+                setImageViewBitmap(R.id.event_item_color, context.resources.getColoredIcon(item.color, R.drawable.monthly_event_dot))
 
                 if (item.startTS == item.endTS) {
                     setViewVisibility(R.id.event_item_end, View.INVISIBLE)
@@ -90,7 +91,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
         return remoteView
     }
 
-    fun getItemViewType(position: Int) = if (events[position] is ListEvent) ITEM_EVENT else ITEM_HEADER
+    private fun getItemViewType(position: Int) = if (events[position] is ListEvent) ITEM_EVENT else ITEM_HEADER
 
     override fun getLoadingView() = null
 
@@ -106,11 +107,12 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
 
     override fun onDataSetChanged() {
         mediumFontSize = context.config.getFontSize()
-        val fromTS = DateTime().seconds()
+        val fromTS = DateTime().seconds() - context.config.displayPastEvents * 60
         val toTS = DateTime().plusYears(1).seconds()
         context.dbHelper.getEventsInBackground(fromTS, toTS) {
             val listItems = ArrayList<ListItem>(it.size)
-            val sorted = it.sortedWith(compareBy({ it.startTS }, { it.endTS }, { it.title }, { it.description }))
+            val replaceDescription = context.config.replaceDescription
+            val sorted = it.sortedWith(compareBy({ it.startTS }, { it.endTS }, { it.title }, { if (replaceDescription) it.location else it.description }))
             val sublist = sorted.subList(0, Math.min(sorted.size, 100))
             var prevCode = ""
             sublist.forEach {
@@ -121,7 +123,7 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
                         listItems.add(ListSection(day))
                     prevCode = code
                 }
-                listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.getIsAllDay(), it.color))
+                listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.getIsAllDay(), it.color, it.location))
             }
 
             this@EventListWidgetAdapter.events = listItems
@@ -132,6 +134,5 @@ class EventListWidgetAdapter(val context: Context, val intent: Intent) : RemoteV
 
     override fun getCount() = events.size
 
-    override fun onDestroy() {
-    }
+    override fun onDestroy() {}
 }

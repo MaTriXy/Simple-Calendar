@@ -6,18 +6,19 @@ import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.extensions.getFilteredEvents
 import com.simplemobiletools.calendar.extensions.seconds
 import com.simplemobiletools.calendar.interfaces.MonthlyCalendar
-import com.simplemobiletools.calendar.models.Day
+import com.simplemobiletools.calendar.models.DayMonthly
 import com.simplemobiletools.calendar.models.Event
 import org.joda.time.DateTime
 import java.util.*
+import kotlin.collections.ArrayList
 
 class MonthlyCalendarImpl(val mCallback: MonthlyCalendar, val mContext: Context) {
     private val DAYS_CNT = 42
     private val YEAR_PATTERN = "YYYY"
 
     private val mToday: String = DateTime().toString(Formatter.DAYCODE_PATTERN)
-    var mEvents = ArrayList<Event>()
-    var mFilterEventTypes = true
+    private var mEvents = ArrayList<Event>()
+    private var mFilterEventTypes = true
 
     lateinit var mTargetDate: DateTime
 
@@ -35,9 +36,8 @@ class MonthlyCalendarImpl(val mCallback: MonthlyCalendar, val mContext: Context)
         updateMonthlyCalendar(targetDate)
     }
 
-    fun getDays() {
-        val days = ArrayList<Day>(DAYS_CNT)
-
+    fun getDays(markDaysWithEvents: Boolean) {
+        val days = ArrayList<DayMonthly>(DAYS_CNT)
         val currMonthDays = mTargetDate.dayOfMonth().maximumValue
         var firstDayIndex = mTargetDate.withDayOfMonth(1).dayOfWeek
         if (!mContext.config.isSundayFirst)
@@ -49,34 +49,42 @@ class MonthlyCalendarImpl(val mCallback: MonthlyCalendar, val mContext: Context)
         var value = prevMonthDays - firstDayIndex + 1
         var curDay: DateTime = mTargetDate
 
-        for (i in 0..DAYS_CNT - 1) {
-            if (i < firstDayIndex) {
-                isThisMonth = false
-                curDay = mTargetDate.withDayOfMonth(1).minusMonths(1)
-            } else if (i == firstDayIndex) {
-                value = 1
-                isThisMonth = true
-                curDay = mTargetDate
-            } else if (value == currMonthDays + 1) {
-                value = 1
-                isThisMonth = false
-                curDay = mTargetDate.withDayOfMonth(1).plusMonths(1)
+        for (i in 0 until DAYS_CNT) {
+            when {
+                i < firstDayIndex -> {
+                    isThisMonth = false
+                    curDay = mTargetDate.withDayOfMonth(1).minusMonths(1)
+                }
+                i == firstDayIndex -> {
+                    value = 1
+                    isThisMonth = true
+                    curDay = mTargetDate
+                }
+                value == currMonthDays + 1 -> {
+                    value = 1
+                    isThisMonth = false
+                    curDay = mTargetDate.withDayOfMonth(1).plusMonths(1)
+                }
             }
 
             isToday = isThisMonth && isToday(mTargetDate, value)
 
             val newDay = curDay.withDayOfMonth(value)
             val dayCode = Formatter.getDayCodeFromDateTime(newDay)
-            val day = Day(value, isThisMonth, isToday, dayCode, false, newDay.weekOfWeekyear, ArrayList())
+            val day = DayMonthly(value, isThisMonth, isToday, dayCode, newDay.weekOfWeekyear, ArrayList())
             days.add(day)
             value++
         }
 
-        markDaysWithEvents(days)
+        if (markDaysWithEvents) {
+            markDaysWithEvents(days)
+        } else {
+            mCallback.updateMonthlyCalendar(mContext, monthName, days, false)
+        }
     }
 
     // it works more often than not, dont touch
-    private fun markDaysWithEvents(days: ArrayList<Day>) {
+    private fun markDaysWithEvents(days: ArrayList<DayMonthly>) {
         mContext.dbHelper.getEventTypes {
             val dayEvents = HashMap<String, ArrayList<Event>>()
             mEvents.forEach {
@@ -98,15 +106,9 @@ class MonthlyCalendarImpl(val mCallback: MonthlyCalendar, val mContext: Context)
             }
 
             days.filter { dayEvents.keys.contains(it.code) }.forEach {
-                val day = it
-                day.hasEvent = true
-
-                val events = dayEvents[it.code]
-                events!!.forEach {
-                    day.eventColors.add(it.color)
-                }
+                it.dayEvents = dayEvents[it.code]!!
             }
-            mCallback.updateMonthlyCalendar(monthName, days)
+            mCallback.updateMonthlyCalendar(mContext, monthName, days, true)
         }
     }
 
@@ -128,11 +130,12 @@ class MonthlyCalendarImpl(val mCallback: MonthlyCalendar, val mContext: Context)
         }
 
     private fun gotEvents(events: ArrayList<Event>) {
-        mEvents = if (mFilterEventTypes)
+        mEvents = if (mFilterEventTypes) {
             mContext.getFilteredEvents(events) as ArrayList<Event>
-        else
+        } else {
             events
+        }
 
-        getDays()
+        getDays(true)
     }
 }

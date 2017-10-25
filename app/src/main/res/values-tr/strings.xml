@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Basit Takvim</string>
     <string name="app_launcher_name">Takvim</string>
@@ -78,24 +79,31 @@
     <string name="last_f">son</string>
 
     <plurals name="days">
-        <item quantity="one">%1$d gün</item>
-        <item quantity="other">günler %1$d</item>
+        <item quantity="one">%d gün</item>
+        <item quantity="other">günler %d</item>
     </plurals>
 
     <plurals name="weeks">
-        <item quantity="one">%1$d hafta</item>
-        <item quantity="other">haftalar %1$d</item>
+        <item quantity="one">%d hafta</item>
+        <item quantity="other">haftalar %d</item>
     </plurals>
 
     <plurals name="months">
-        <item quantity="one">%1$d ay</item>
-        <item quantity="other">aylar %1$d</item>
+        <item quantity="one">%d ay</item>
+        <item quantity="other">aylar %d</item>
     </plurals>
 
     <plurals name="years">
-        <item quantity="one">%1$d yıl</item>
-        <item quantity="other">yıllar %1$d</item>
+        <item quantity="one">%d yıl</item>
+        <item quantity="other">yıllar %d</item>
     </plurals>
+
+    <!-- Birthdays -->
+    <string name="birthdays">Birthdays</string>
+    <string name="add_birthdays">Add contact birthdays</string>
+    <string name="no_contacts_permission">Cannot obtain birthdays without the Contacts permission</string>
+    <string name="no_birthdays">No birthdays have been found</string>
+    <string name="birthdays_added">Birthdays added successfully</string>
 
     <!-- Event Reminders -->
     <string name="reminder">Hatırlatma</string>
@@ -109,23 +117,23 @@
     <string name="add_another_reminder">Başka bir hatırlatma ekle</string>
 
     <plurals name="minutes_before">
-        <item quantity="one">%1$d dakika önce</item>
-        <item quantity="other">%1$d dakika önce</item>
+        <item quantity="one">%d dakika önce</item>
+        <item quantity="other">%d dakika önce</item>
     </plurals>
 
     <plurals name="hours_before">
-        <item quantity="one">%1$d saat önce</item>
-        <item quantity="other">%1$d saat önce</item>
+        <item quantity="one">%d saat önce</item>
+        <item quantity="other">%d saat önce</item>
     </plurals>
 
     <plurals name="days_before">
-        <item quantity="one">%1$d önceki gün</item>
-        <item quantity="other">%1$d önceki gün</item>
+        <item quantity="one">%d önceki gün</item>
+        <item quantity="other">%d önceki gün</item>
     </plurals>
 
     <!-- Export / Import -->
-    <string name="importing">Importing&#8230;</string>
-    <string name="exporting">Exporting&#8230;</string>
+    <string name="importing">Importing…</string>
+    <string name="exporting">Exporting…</string>
     <string name="import_events">Olayları içe aktar</string>
     <string name="export_events">Olayları dışa aktar</string>
     <string name="import_events_from_ics">Bir .ics dosyasından olayları içe aktar</string>
@@ -136,7 +144,6 @@
     <string name="exporting_events_failed">Olayları dışa aktarma başarısız</string>
     <string name="importing_some_events_failed">Bazı etkinlikleri içe aktarma başarısız</string>
     <string name="exporting_some_events_failed">Bazı etkinlikleri dışa aktarma başarısız</string>
-    <string name="invalid_file_format">Geçersiz dosya biçimi</string>
     <string name="default_event_type">Varsayılan olay türü</string>
     <string name="no_events_for_exporting">Dışa aktarmak için etkinlik bulunamadı</string>
     <string name="export_past_events_too">Geçmişteki etkinlikleri de dışa aktar</string>
@@ -146,6 +153,7 @@
 
     <!-- Event details -->
     <string name="title">Başlık</string>
+    <string name="location">Location</string>
     <string name="description">Açıklama</string>
     <string name="all_day">Tüm-gün</string>
 
@@ -188,9 +196,11 @@
     <string name="no_ringtone_selected">Boş</string>
     <string name="day_end_before_start">Gün başlamadan önce bitemez</string>
     <string name="caldav_sync">CalDAV sync</string>
+    <string name="event_lists">Event lists</string>
     <string name="display_past_events">Display events from the past</string>
     <string name="snooze_delay">Postpone reminder with Snooze by</string>
     <string name="widgets">Widgets</string>
+    <string name="replace_description_with_location">Replace Description with Location at list view entries</string>
 
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
@@ -201,15 +211,17 @@
     <string name="refreshing">Refreshing…</string>
     <string name="refreshing_complete">Refreshing complete</string>
     <string name="editing_calendar_failed">Editing calendar failed</string>
+    <string name="syncing">Syncing…</string>
+    <string name="synchronization_completed">Sync completed</string>
 
     <plurals name="by_minutes">
-        <item quantity="one">%1$d minute</item>
-        <item quantity="other">%1$d minutes</item>
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
     </plurals>
 
     <plurals name="by_hours">
-        <item quantity="one">%1$d hour</item>
-        <item quantity="other">%1$d hours</item>
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
     </plurals>
 
     <string name="never">Never</string>
@@ -275,7 +287,7 @@
 
         Depolama izni yalnızca .ics dosyalarından olayları içe aktarmak için gereklidir.
 
-        Internet and Contacts permissions are used only at Google sync.
+        Contacts permission is used only at importing contact birthdays.
 
         Bu uygulama, daha büyük bir uygulama serisinden sadece bir parça. Geri kalanını şu adresten bulabilirsiniz: http://www.simplemobiletools.com
     </string>

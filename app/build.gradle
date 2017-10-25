@@ -4,14 +4,14 @@ apply plugin: 'kotlin-android-extensions'
 
 android {
     compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    buildToolsVersion "25.0.3"
 
     defaultConfig {
         applicationId "com.simplemobiletools.calendar"
         minSdkVersion 16
         targetSdkVersion 25
-        versionCode 87
-        versionName "2.6.1"
+        versionCode 98
+        versionName "2.9.0"
         multiDexEnabled true
     }
 
@@ -25,16 +25,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
-        fdroid {
-            initWith debug
-        }
     }
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
         debug.java.srcDirs += 'src/debug/kotlin'
         release.java.srcDirs += 'src/release/kotlin'
-        fdroid.java.srcDirs += 'src/fdroid/kotlin'
     }
 
     lintOptions {
@@ -48,7 +44,7 @@ ext {
 }
 
 dependencies {
-    compile 'com.simplemobiletools:commons:2.25.4'
+    compile 'com.simplemobiletools:commons:2.31.1'
     compile 'joda-time:joda-time:2.9.1'
     compile 'com.facebook.stetho:stetho:1.4.1'
     compile 'com.bignerdranch.android:recyclerview-multiselect:0.2'
@@ -61,7 +57,7 @@ dependencies {
 }
 
 buildscript {
-    ext.kotlin_version = '1.1.4-2'
+    ext.kotlin_version = '1.1.51'
     repositories {
         mavenCentral()
     }

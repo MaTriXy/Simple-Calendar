@@ -2,26 +2,28 @@ package com.simplemobiletools.calendar.activities
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
+import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import com.simplemobiletools.calendar.R
+import com.simplemobiletools.calendar.extensions.addDayEvents
+import com.simplemobiletools.calendar.extensions.addDayNumber
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.helpers.LOW_ALPHA
 import com.simplemobiletools.calendar.helpers.MonthlyCalendarImpl
 import com.simplemobiletools.calendar.helpers.MyWidgetMonthlyProvider
 import com.simplemobiletools.calendar.interfaces.MonthlyCalendar
-import com.simplemobiletools.calendar.models.Day
+import com.simplemobiletools.calendar.models.DayMonthly
 import com.simplemobiletools.commons.dialogs.ColorPickerDialog
 import com.simplemobiletools.commons.extensions.adjustAlpha
 import com.simplemobiletools.commons.extensions.beVisible
-import com.simplemobiletools.commons.extensions.removeFlag
 import kotlinx.android.synthetic.main.first_row.*
 import kotlinx.android.synthetic.main.top_navigation.*
 import kotlinx.android.synthetic.main.widget_config_monthly.*
@@ -29,8 +31,9 @@ import org.joda.time.DateTime
 
 class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
     lateinit var mRes: Resources
-    private var mDays: List<Day>? = null
+    private var mDays: List<DayMonthly>? = null
     private var mPackageName = ""
+    private var dayLabelHeight = 0
 
     private var mBgAlpha = 0f
     private var mWidgetId = 0
@@ -39,12 +42,12 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
     private var mTextColorWithoutTransparency = 0
     private var mTextColor = 0
     private var mWeakTextColor = 0
+    private var mPrimaryColor = 0
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setResult(Activity.RESULT_CANCELED)
         setContentView(R.layout.widget_config_monthly)
-        mPackageName = packageName
         initVariables()
 
         val extras = intent.extras
@@ -60,6 +63,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
     }
 
     private fun initVariables() {
+        mPackageName = packageName
         mRes = resources
 
         mTextColorWithoutTransparency = config.widgetTextColor
@@ -81,7 +85,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         MonthlyCalendarImpl(this, applicationContext).updateMonthlyCalendar(DateTime(), false)
     }
 
-    fun saveConfig() {
+    private fun saveConfig() {
         storeWidgetColors()
         requestWidgetUpdate()
 
@@ -99,14 +103,14 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         }
     }
 
-    fun pickBackgroundColor() {
+    private fun pickBackgroundColor() {
         ColorPickerDialog(this, mBgColorWithoutTransparency) {
             mBgColorWithoutTransparency = it
             updateBgColor()
         }
     }
 
-    fun pickTextColor() {
+    private fun pickTextColor() {
         ColorPickerDialog(this, mTextColor) {
             mTextColorWithoutTransparency = it
             updateTextColors()
@@ -124,6 +128,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
     private fun updateTextColors() {
         mTextColor = mTextColorWithoutTransparency
         mWeakTextColor = mTextColorWithoutTransparency.adjustAlpha(LOW_ALPHA)
+        mPrimaryColor = config.primaryColor
 
         top_left_arrow.drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
         top_right_arrow.drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
@@ -156,23 +161,14 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
             }
         }
 
-        val todayCircle = resources.getDrawable(R.drawable.circle_empty)
-        todayCircle.setColorFilter(mTextColor, PorterDuff.Mode.SRC_IN)
+        val dividerMargin = mRes.displayMetrics.density.toInt()
+        for (i in 0 until len) {
+            (findViewById(mRes.getIdentifier("day_$i", "id", mPackageName)) as LinearLayout).apply {
+                val day = mDays!![i]
+                removeAllViews()
 
-        for (i in 0..len - 1) {
-            val day = mDays!![i]
-            var curTextColor = mWeakTextColor
-
-            if (day.isThisMonth) {
-                curTextColor = mTextColor
-            }
-
-            (findViewById(mRes.getIdentifier("day_$i", "id", mPackageName)) as TextView).apply {
-                text = day.value.toString()
-                setTextColor(curTextColor)
-
-                paintFlags = if (day.hasEvent) (paintFlags or Paint.UNDERLINE_TEXT_FLAG) else (paintFlags.removeFlag(Paint.UNDERLINE_TEXT_FLAG))
-                background = if (day.isToday) todayCircle else null
+                context.addDayNumber(mTextColor, day, this, dayLabelHeight) { dayLabelHeight = it }
+                context.addDayEvents(day, this, mRes, dividerMargin)
             }
         }
     }
@@ -192,16 +188,12 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         }
     }
 
-    override fun updateMonthlyCalendar(month: String, days: List<Day>) {
+    override fun updateMonthlyCalendar(context: Context, month: String, days: List<DayMonthly>, checkedEvents: Boolean) {
         runOnUiThread {
             mDays = days
-            updateMonth(month)
+            top_value.text = month
             updateDays()
         }
-    }
-
-    private fun updateMonth(month: String) {
-        top_value.text = month
     }
 
     private fun updateLabels() {

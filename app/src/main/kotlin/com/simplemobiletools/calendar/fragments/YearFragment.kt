@@ -14,6 +14,7 @@ import com.simplemobiletools.calendar.helpers.YEAR_LABEL
 import com.simplemobiletools.calendar.helpers.YearlyCalendarImpl
 import com.simplemobiletools.calendar.interfaces.NavigationListener
 import com.simplemobiletools.calendar.interfaces.YearlyCalendar
+import com.simplemobiletools.calendar.models.DayYearly
 import com.simplemobiletools.calendar.views.SmallMonthView
 import com.simplemobiletools.commons.extensions.updateTextColors
 import kotlinx.android.synthetic.main.fragment_year.view.*
@@ -21,9 +22,10 @@ import org.joda.time.DateTime
 import java.util.*
 
 class YearFragment : Fragment(), YearlyCalendar {
-    private var mListener: NavigationListener? = null
+    var mListener: NavigationListener? = null
     private var mYear = 0
     private var mSundayFirst = false
+    private var lastHash = 0
 
     lateinit var mView: View
     lateinit var mCalendar: YearlyCalendarImpl
@@ -67,7 +69,7 @@ class YearFragment : Fragment(), YearlyCalendar {
             if (!mSundayFirst)
                 dayOfWeek--
 
-            monthView.setFirstDay(dayOfWeek)
+            monthView.firstDay = dayOfWeek
             monthView.setOnClickListener {
                 mListener?.goToDateTime(DateTime().withDate(mYear, i, 1))
             }
@@ -81,18 +83,18 @@ class YearFragment : Fragment(), YearlyCalendar {
             monthLabel.setTextColor(context.config.primaryColor)
 
             val monthView = mView.findViewById(res.getIdentifier("month_${now.monthOfYear}", "id", activity.packageName)) as SmallMonthView
-            monthView.setTodaysId(now.dayOfMonth)
+            monthView.todaysId = now.dayOfMonth
         }
     }
 
-    fun setListener(listener: NavigationListener) {
-        mListener = listener
-    }
-
-    override fun updateYearlyCalendar(events: SparseArray<ArrayList<Int>>) {
+    override fun updateYearlyCalendar(events: SparseArray<ArrayList<DayYearly>>, hashCode: Int) {
         if (!isAdded)
             return
 
+        if (hashCode == lastHash) {
+            return
+        }
+        lastHash = hashCode
         val res = resources
         for (i in 1..12) {
             val monthView = mView.findViewById(res.getIdentifier("month_$i", "id", context.packageName)) as SmallMonthView

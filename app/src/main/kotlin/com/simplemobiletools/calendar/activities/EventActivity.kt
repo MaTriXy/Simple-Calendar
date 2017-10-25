@@ -24,6 +24,10 @@ import org.joda.time.DateTime
 import java.util.*
 
 class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
+    companion object {
+        val STORED_LOCALLY_ONLY = 0
+    }
+
     private var mReminder1Minutes = 0
     private var mReminder2Minutes = 0
     private var mReminder3Minutes = 0
@@ -33,6 +37,8 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     private var mEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
     private var mDialogTheme = 0
     private var mEventOccurrenceTS = 0
+    private var mEventCalendarId = STORED_LOCALLY_ONLY
+    private var wasActivityInitialized = false
 
     lateinit var mEventStartDateTime: DateTime
     lateinit var mEventEndDateTime: DateTime
@@ -64,8 +70,9 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
             mReminder2Minutes = -1
             mReminder3Minutes = -1
             val startTS = intent.getIntExtra(NEW_EVENT_START_TS, 0)
-            if (startTS == 0)
+            if (startTS == 0) {
                 return
+            }
 
             setupNewEvent(Formatter.getDateTimeFromTS(startTS))
         }
@@ -76,6 +83,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         updateEndTexts()
         updateEventType()
         updateCalDAVCalendar()
+        updateLocation()
 
         event_start_date.setOnClickListener { setupStartDate() }
         event_start_time.setOnClickListener { setupStartTime() }
@@ -98,6 +106,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
         updateTextColors(event_scrollview)
         updateIconColors()
+        wasActivityInitialized = true
     }
 
     private fun setupEditEvent() {
@@ -108,6 +117,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         mEventStartDateTime = Formatter.getDateTimeFromTS(realStart)
         mEventEndDateTime = Formatter.getDateTimeFromTS(realStart + duration)
         event_title.setText(mEvent.title)
+        event_location.setText(mEvent.location)
         event_description.setText(mEvent.description)
         event_description.movementMethod = LinkMovementMethod.getInstance()
 
@@ -118,6 +128,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         mRepeatLimit = mEvent.repeatLimit
         mRepeatRule = mEvent.repeatRule
         mEventTypeId = mEvent.eventType
+        mEventCalendarId = mEvent.getCalDAVCalendarId()
         checkRepeatTexts(mRepeatInterval)
     }
 
@@ -128,6 +139,9 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
         val addHours = if (intent.getBooleanExtra(NEW_EVENT_SET_HOUR_DURATION, false)) 1 else 0
         mEventEndDateTime = mEventStartDateTime.plusHours(addHours)
+
+        val isLastCaldavCalendarOK = config.caldavSync && config.getSyncedCalendarIdsAsList().contains(config.lastUsedCaldavCalendar.toString())
+        mEventCalendarId = if (isLastCaldavCalendarOK) config.lastUsedCaldavCalendar else STORED_LOCALLY_ONLY
     }
 
     private fun showReminder1Dialog() {
@@ -190,16 +204,20 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     }
 
     private fun checkRepetitionLimitText() {
-        event_repetition_limit.text = if (mRepeatLimit == 0) {
-            event_repetition_limit_label.text = getString(R.string.repeat)
-            resources.getString(R.string.forever)
-        } else if (mRepeatLimit > 0) {
-            event_repetition_limit_label.text = getString(R.string.repeat_till)
-            val repeatLimitDateTime = Formatter.getDateTimeFromTS(mRepeatLimit)
-            Formatter.getFullDate(applicationContext, repeatLimitDateTime)
-        } else {
-            event_repetition_limit_label.text = getString(R.string.repeat)
-            "${-mRepeatLimit} ${getString(R.string.times)}"
+        event_repetition_limit.text = when {
+            mRepeatLimit == 0 -> {
+                event_repetition_limit_label.text = getString(R.string.repeat)
+                resources.getString(R.string.forever)
+            }
+            mRepeatLimit > 0 -> {
+                event_repetition_limit_label.text = getString(R.string.repeat_till)
+                val repeatLimitDateTime = Formatter.getDateTimeFromTS(mRepeatLimit)
+                Formatter.getFullDate(applicationContext, repeatLimitDateTime)
+            }
+            else -> {
+                event_repetition_limit_label.text = getString(R.string.repeat)
+                "${-mRepeatLimit} ${getString(R.string.times)}"
+            }
         }
     }
 
@@ -391,11 +409,16 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
             val calendars = CalDAVHandler(applicationContext).getCalDAVCalendars().filter {
                 it.canWrite() && config.getSyncedCalendarIdsAsList().contains(it.id.toString())
             }
-            updateCurrentCalendarInfo(getCalendarWithId(calendars, getCalendarId()))
+            updateCurrentCalendarInfo(if (mEventCalendarId == STORED_LOCALLY_ONLY) null else getCalendarWithId(calendars, getCalendarId()))
 
             event_caldav_calendar_holder.setOnClickListener {
                 hideKeyboard()
-                SelectEventCalendarDialog(this, calendars, getCalendarId()) {
+                SelectEventCalendarDialog(this, calendars, mEventCalendarId) {
+                    if (mEventCalendarId != STORED_LOCALLY_ONLY && it == STORED_LOCALLY_ONLY) {
+                        mEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
+                        updateEventType()
+                    }
+                    mEventCalendarId = it
                     config.lastUsedCaldavCalendar = it
                     updateCurrentCalendarInfo(getCalendarWithId(calendars, it))
                 }
@@ -419,19 +442,19 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         if (currentCalendar == null) {
             event_caldav_calendar_name.apply {
                 text = getString(R.string.store_locally_only)
-                apply {
-                    setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.medium_margin).toInt())
-                }
+                setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.medium_margin).toInt())
             }
         } else {
             event_caldav_calendar_email.text = currentCalendar.accountName
             event_caldav_calendar_name.apply {
                 text = currentCalendar.displayName
-                apply {
-                    setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.tiny_margin).toInt())
-                }
+                setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.tiny_margin).toInt())
             }
         }
+    }
+
+    private fun updateLocation() {
+        event_location.setText(mEvent.location)
     }
 
     private fun toggleAllDay(isChecked: Boolean) {
@@ -442,16 +465,18 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_event, menu)
-        menu.findItem(R.id.delete).isVisible = mDialogTheme != 0 && mEvent.id != 0
-        menu.findItem(R.id.share).isVisible = mDialogTheme != 0 && mEvent.id != 0
+        if (wasActivityInitialized) {
+            menu.findItem(R.id.delete).isVisible = mDialogTheme != 0 && mEvent.id != 0
+            menu.findItem(R.id.share).isVisible = mDialogTheme != 0 && mEvent.id != 0
+        }
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.share -> shareEvent()
-            R.id.delete -> deleteEvent()
             R.id.save -> saveEvent()
+            R.id.delete -> deleteEvent()
+            R.id.share -> shareEvent()
             else -> return super.onOptionsItemSelected(item)
         }
         return true
@@ -492,16 +517,24 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         val oldSource = mEvent.source
         val newImportId = if (mEvent.id != 0) mEvent.importId else UUID.randomUUID().toString().replace("-", "") + System.currentTimeMillis().toString()
 
-        val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0) mEventTypeId else dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)!!.id
-        val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0) SOURCE_SIMPLE_CALENDAR else "$CALDAV-${config.lastUsedCaldavCalendar}"
+        val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
+            mEventTypeId
+        } else {
+            dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)!!.id
+        }
+
+        val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
+            SOURCE_SIMPLE_CALENDAR
+        } else {
+            "$CALDAV-${config.lastUsedCaldavCalendar}"
+        }
 
         val reminders = sortedSetOf(mReminder1Minutes, mReminder2Minutes, mReminder3Minutes).filter { it != REMINDER_OFF }
-        val newDescription = event_description.value
         mEvent.apply {
             startTS = newStartTS
             endTS = newEndTS
             title = newTitle
-            description = newDescription
+            description = event_description.value
             reminder1Minutes = reminders.elementAtOrElse(0) { REMINDER_OFF }
             reminder2Minutes = reminders.elementAtOrElse(1) { REMINDER_OFF }
             reminder3Minutes = reminders.elementAtOrElse(2) { REMINDER_OFF }
@@ -515,6 +548,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
             isDstIncluded = TimeZone.getDefault().inDaylightTime(Date())
             lastUpdated = System.currentTimeMillis()
             source = newSource
+            location = event_location.value
         }
 
         // recreate the event if it was moved in a different CalDAV calendar

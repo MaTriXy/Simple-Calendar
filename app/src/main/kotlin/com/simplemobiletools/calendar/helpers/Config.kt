@@ -71,6 +71,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getInt(FONT_SIZE, FONT_SIZE_MEDIUM)
         set(size) = prefs.edit().putInt(FONT_SIZE, size).apply()
 
+    var googleSync: Boolean
+        get() = prefs.getBoolean(GOOGLE_SYNC, false)
+        set(googleSync) = prefs.edit().putBoolean(GOOGLE_SYNC, googleSync).apply()
+
     var caldavSync: Boolean
         get() = prefs.getBoolean(CALDAV_SYNC, false)
         set(caldavSync) {
@@ -85,6 +89,10 @@ class Config(context: Context) : BaseConfig(context) {
     var lastUsedCaldavCalendar: Int
         get() = prefs.getInt(LAST_USED_CALDAV_CALENDAR, getSyncedCalendarIdsAsList().first().toInt())
         set(calendarId) = prefs.edit().putInt(LAST_USED_CALDAV_CALENDAR, calendarId).apply()
+
+    var replaceDescription: Boolean
+        get() = prefs.getBoolean(REPLACE_DESCRIPTION, false)
+        set(replaceDescription) = prefs.edit().putBoolean(REPLACE_DESCRIPTION, replaceDescription).apply()
 
     fun getSyncedCalendarIdsAsList() = caldavSyncedCalendarIDs.split(",").filter { it.trim().isNotEmpty() } as ArrayList<String>
 

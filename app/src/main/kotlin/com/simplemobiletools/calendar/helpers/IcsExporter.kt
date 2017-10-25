@@ -14,11 +14,16 @@ class IcsExporter {
         EXPORT_FAIL, EXPORT_OK, EXPORT_PARTIAL
     }
 
-    var eventsExported = 0
-    var eventsFailed = 0
+    private var eventsExported = 0
+    private var eventsFailed = 0
 
     fun exportEvents(activity: SimpleActivity, file: File, events: ArrayList<Event>, callback: (result: ExportResult) -> Unit) {
         activity.getFileOutputStream(file) {
+            if (it == null) {
+                callback(EXPORT_FAIL)
+                return@getFileOutputStream
+            }
+
             it.bufferedWriter().use { out ->
                 out.writeLn(BEGIN_CALENDAR)
                 for (event in events) {
@@ -28,6 +33,7 @@ class IcsExporter {
                     event.importId.let { if (it.isNotEmpty()) out.writeLn("$UID$it") }
                     event.eventType.let { out.writeLn("$CATEGORIES${activity.dbHelper.getEventType(it)?.title}") }
                     event.lastUpdated.let { out.writeLn("$LAST_MODIFIED:${Formatter.getExportedTime(it)}") }
+                    event.location.let { if (it.isNotEmpty()) out.writeLn("$LOCATION$it") }
 
                     if (event.getIsAllDay()) {
                         out.writeLn("$DTSTART;$VALUE=$DATE:${Formatter.getDayCodeFromTS(event.startTS)}")
@@ -49,12 +55,11 @@ class IcsExporter {
                 out.writeLn(END_CALENDAR)
             }
 
-            callback(if (eventsExported == 0) {
-                EXPORT_FAIL
-            } else if (eventsFailed > 0) {
-                EXPORT_PARTIAL
-            } else {
-                EXPORT_OK
+
+            callback(when {
+                eventsExported == 0 -> EXPORT_FAIL
+                eventsFailed > 0 -> EXPORT_PARTIAL
+                else -> EXPORT_OK
             })
         }
     }
@@ -67,10 +72,12 @@ class IcsExporter {
 
     private fun checkReminder(minutes: Int, out: BufferedWriter) {
         if (minutes != -1) {
-            out.writeLn(BEGIN_ALARM)
-            out.writeLn("$ACTION$DISPLAY")
-            out.writeLn("$TRIGGER-${Parser().getDurationCode(minutes)}")
-            out.writeLn(END_ALARM)
+            out.apply {
+                writeLn(BEGIN_ALARM)
+                writeLn("$ACTION$DISPLAY")
+                writeLn("$TRIGGER-${Parser().getDurationCode(minutes)}")
+                writeLn(END_ALARM)
+            }
         }
     }
 

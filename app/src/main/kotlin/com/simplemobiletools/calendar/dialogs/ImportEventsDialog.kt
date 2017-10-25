@@ -1,9 +1,9 @@
 package com.simplemobiletools.calendar.dialogs
 
-import android.app.Activity
 import android.support.v7.app.AlertDialog
 import android.view.ViewGroup
 import com.simplemobiletools.calendar.R
+import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.helpers.DBHelper
@@ -14,7 +14,7 @@ import com.simplemobiletools.commons.extensions.setupDialogStuff
 import com.simplemobiletools.commons.extensions.toast
 import kotlinx.android.synthetic.main.dialog_import_events.view.*
 
-class ImportEventsDialog(val activity: Activity, val path: String, val callback: (refreshView: Boolean) -> Unit) : AlertDialog.Builder(activity) {
+class ImportEventsDialog(val activity: SimpleActivity, val path: String, val callback: (refreshView: Boolean) -> Unit) {
     var currEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
 
     init {
@@ -36,7 +36,7 @@ class ImportEventsDialog(val activity: Activity, val path: String, val callback:
             getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener({
                 activity.toast(R.string.importing)
                 Thread({
-                    val result = IcsImporter().importEvents(context, path, currEventTypeId)
+                    val result = IcsImporter().importEvents(activity, path, currEventTypeId)
                     handleParseResult(result)
                     dismiss()
                 }).start()
@@ -45,7 +45,7 @@ class ImportEventsDialog(val activity: Activity, val path: String, val callback:
     }
 
     private fun updateEventType(view: ViewGroup) {
-        val eventType = context.dbHelper.getEventType(currEventTypeId)
+        val eventType = activity.dbHelper.getEventType(currEventTypeId)
         view.import_event_type_title.text = eventType!!.getDisplayTitle()
         view.import_event_type_color.setBackgroundWithStroke(eventType.color, activity.config.backgroundColor)
     }
@@ -56,6 +56,6 @@ class ImportEventsDialog(val activity: Activity, val path: String, val callback:
             IMPORT_PARTIAL -> R.string.importing_some_events_failed
             else -> R.string.importing_events_failed
         })
-        callback.invoke(result != IMPORT_FAIL)
+        callback(result != IMPORT_FAIL)
     }
 }

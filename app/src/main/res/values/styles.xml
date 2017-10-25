@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
 
     <style name="AppTheme" parent="AppTheme.Base"/>
@@ -11,6 +12,14 @@
     <style name="MetaView" parent="DayView">
         <item name="android:textStyle">bold</item>
         <item name="android:textSize">@dimen/meta_text_size</item>
+    </style>
+
+    <style name="WeekNumberStyle">
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">top|center_horizontal</item>
+        <item name="android:textSize">@dimen/day_monthly_text_size</item>
+        <item name="android:textColor">@color/default_text_color</item>
+        <item name="android:fontFamily">sans-serif-light</item>
     </style>
 
     <style name="ArrowStyle">

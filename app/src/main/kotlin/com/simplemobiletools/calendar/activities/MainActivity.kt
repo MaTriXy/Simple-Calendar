@@ -1,16 +1,15 @@
 package com.simplemobiletools.calendar.activities
 
-import android.Manifest
 import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.provider.CalendarContract
-import android.support.v4.app.ActivityCompat
+import android.provider.ContactsContract
 import android.support.v4.view.ViewPager
 import android.util.SparseIntArray
 import android.view.Menu
@@ -37,14 +36,13 @@ import com.simplemobiletools.calendar.views.MyScrollView
 import com.simplemobiletools.commons.dialogs.FilePickerDialog
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
 import com.simplemobiletools.commons.extensions.*
-import com.simplemobiletools.commons.helpers.LICENSE_JODA
-import com.simplemobiletools.commons.helpers.LICENSE_KOTLIN
-import com.simplemobiletools.commons.helpers.LICENSE_STETHO
+import com.simplemobiletools.commons.helpers.*
 import com.simplemobiletools.commons.models.RadioItem
 import com.simplemobiletools.commons.models.Release
 import kotlinx.android.synthetic.main.activity_main.*
 import org.joda.time.DateTime
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -53,8 +51,6 @@ class MainActivity : SimpleActivity(), NavigationListener {
     private val PREFILLED_MONTHS = 97
     private val PREFILLED_YEARS = 31
     private val PREFILLED_WEEKS = 61
-    private val STORAGE_PERMISSION_IMPORT = 1
-    private val STORAGE_PERMISSION_EXPORT = 2
 
     private var mIsMonthSelected = false
     private var mStoredTextColor = 0
@@ -78,29 +74,51 @@ class MainActivity : SimpleActivity(), NavigationListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        storeStoragePaths()
         calendar_fab.setOnClickListener { launchNewEventIntent() }
         checkWhatsNewDialog()
-        storeStoragePaths()
+
         if (resources.getBoolean(R.bool.portrait_only))
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
         if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
-            tryImportEventsFromFile(intent.data)
+            val uri = intent.data
+            if (uri.authority == "com.android.calendar") {
+                // clicking date on a third party widget: content://com.android.calendar/time/1507309245683
+                if (intent?.extras?.getBoolean("DETAIL_VIEW", false) == true) {
+                    val timestamp = uri.pathSegments.last()
+                    if (timestamp.areDigitsOnly()) {
+                        openDayAt(timestamp.toLong())
+                        return
+                    }
+                }
+            } else {
+                tryImportEventsFromFile(uri)
+            }
         }
+
         storeStateVariables()
         updateViewPager()
 
-        if (!hasCalendarPermission()) {
+        if (!hasPermission(PERMISSION_WRITE_CALENDAR)) {
             config.caldavSync = false
         }
 
         recheckCalDAVCalendars {}
+
+        if (config.googleSync) {
+            val ids = dbHelper.getGoogleSyncEvents().map { it.id.toString() }.toTypedArray()
+            dbHelper.deleteEvents(ids, false)
+            config.googleSync = false
+        }
+
+        checkOpenIntents()
     }
 
     override fun onResume() {
         super.onResume()
         if (mStoredTextColor != config.textColor || mStoredBackgroundColor != config.backgroundColor || mStoredPrimaryColor != config.primaryColor
-                || mStoredDayCode != getCurrentDayCode()) {
+                || mStoredDayCode != Formatter.getTodayCode()) {
             updateViewPager()
         }
 
@@ -153,6 +171,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
             R.id.filter -> showFilterDialog()
             R.id.refresh_caldav_calendars -> refreshCalDAVCalendars()
             R.id.add_holidays -> addHolidays()
+            R.id.add_birthdays -> tryAddBirthdays()
             R.id.import_events -> tryImportEvents()
             R.id.export_events -> tryExportEvents()
             R.id.settings -> launchSettings()
@@ -174,10 +193,25 @@ class MainActivity : SimpleActivity(), NavigationListener {
         mStoredTextColor = config.textColor
         mStoredPrimaryColor = config.primaryColor
         mStoredBackgroundColor = config.backgroundColor
-        mStoredDayCode = getCurrentDayCode()
+        mStoredDayCode = Formatter.getTodayCode()
     }
 
-    private fun getCurrentDayCode() = Formatter.getDayCodeFromTS((System.currentTimeMillis() / 1000).toInt())
+    private fun checkOpenIntents() {
+        val dayCodeToOpen = intent.getStringExtra(DAY_CODE) ?: ""
+        if (dayCodeToOpen.isNotEmpty()) {
+            openDayCode(dayCodeToOpen)
+        }
+
+        val eventIdToOpen = intent.getIntExtra(EVENT_ID, 0)
+        val eventOccurrenceToOpen = intent.getIntExtra(EVENT_OCCURRENCE_TS, 0)
+        if (eventIdToOpen != 0 && eventOccurrenceToOpen != 0) {
+            Intent(this, EventActivity::class.java).apply {
+                putExtra(EVENT_ID, eventIdToOpen)
+                putExtra(EVENT_OCCURRENCE_TS, eventOccurrenceToOpen)
+                startActivity(this)
+            }
+        }
+    }
 
     private fun showViewDialog() {
         val res = resources
@@ -255,12 +289,29 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 val holidays = getString(R.string.holidays)
                 var eventTypeId = dbHelper.getEventTypeIdWithTitle(holidays)
                 if (eventTypeId == -1) {
-                    val eventType = EventType(0, holidays, config.primaryColor)
+                    val eventType = EventType(0, holidays, resources.getColor(R.color.default_holidays_color))
                     eventTypeId = dbHelper.insertEventType(eventType)
                 }
-                val result = IcsImporter().importEvents(applicationContext, it as String, eventTypeId)
+                val result = IcsImporter().importEvents(this, it as String, eventTypeId)
                 handleParseResult(result)
+                if (result != IcsImporter.ImportResult.IMPORT_FAIL) {
+                    runOnUiThread {
+                        updateViewPager()
+                    }
+                }
             }).start()
+        }
+    }
+
+    private fun tryAddBirthdays() {
+        handlePermission(PERMISSION_READ_CONTACTS) {
+            if (it) {
+                Thread({
+                    addBirthdays()
+                }).start()
+            } else {
+                toast(R.string.no_contacts_permission)
+            }
         }
     }
 
@@ -270,6 +321,61 @@ class MainActivity : SimpleActivity(), NavigationListener {
             IcsImporter.ImportResult.IMPORT_PARTIAL -> R.string.importing_some_holidays_failed
             else -> R.string.importing_holidays_failed
         }, Toast.LENGTH_LONG)
+    }
+
+    private fun addBirthdays() {
+        val birthdays = getString(R.string.birthdays)
+        var eventTypeId = dbHelper.getEventTypeIdWithTitle(birthdays)
+        if (eventTypeId == -1) {
+            val eventType = EventType(0, birthdays, resources.getColor(R.color.default_birthdays_color))
+            eventTypeId = dbHelper.insertEventType(eventType)
+        }
+
+        val birthdayImportIDs = dbHelper.getBirthdays().map { it.importId }
+        var birthdaysAdded = 0
+        val uri = ContactsContract.Data.CONTENT_URI
+        val projection = arrayOf(ContactsContract.Contacts.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Event.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Event.CONTACT_LAST_UPDATED_TIMESTAMP,
+                ContactsContract.CommonDataKinds.Event.START_DATE)
+
+        val selection = "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Event.TYPE} = ?"
+        val selectionArgs = arrayOf(ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE, ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY.toString())
+        var cursor: Cursor? = null
+        try {
+            cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
+            if (cursor?.moveToFirst() == true) {
+                do {
+                    val contactId = cursor.getIntValue(ContactsContract.CommonDataKinds.Event.CONTACT_ID).toString()
+                    val name = cursor.getStringValue(ContactsContract.Contacts.DISPLAY_NAME)
+                    val birthDay = cursor.getStringValue(ContactsContract.CommonDataKinds.Event.START_DATE)
+                    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    val timestamp = (formatter.parse(birthDay).time / 1000).toInt()
+                    val lastUpdated = cursor.getLongValue(ContactsContract.CommonDataKinds.Event.CONTACT_LAST_UPDATED_TIMESTAMP)
+                    val event = Event(0, timestamp, timestamp, name, importId = contactId, flags = FLAG_ALL_DAY, repeatInterval = YEAR,
+                            eventType = eventTypeId, source = SOURCE_CONTACT_BIRTHDAY, lastUpdated = lastUpdated)
+
+                    if (!birthdayImportIDs.contains(contactId)) {
+                        dbHelper.insert(event, false) {
+                            birthdaysAdded++
+                        }
+                    }
+                } while (cursor.moveToNext())
+            }
+        } catch (e: Exception) {
+            showErrorToast(e)
+        } finally {
+            cursor?.close()
+        }
+
+        runOnUiThread {
+            if (birthdaysAdded > 0) {
+                toast(R.string.birthdays_added)
+                updateViewPager()
+            } else {
+                toast(R.string.no_birthdays)
+            }
+        }
     }
 
     private fun updateView(view: Int) {
@@ -298,18 +404,18 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun refreshViewPager() {
         when {
-            config.storedView == YEARLY_VIEW -> (main_view_pager.adapter as MyYearPagerAdapter).refreshEvents(main_view_pager.currentItem)
+            config.storedView == YEARLY_VIEW -> (main_view_pager.adapter as? MyYearPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
             config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
-            config.storedView == WEEKLY_VIEW -> (week_view_view_pager.adapter as MyWeekPagerAdapter).refreshEvents(week_view_view_pager.currentItem)
-            else -> (main_view_pager.adapter as MyMonthPagerAdapter).refreshEvents(main_view_pager.currentItem)
+            config.storedView == WEEKLY_VIEW -> (week_view_view_pager.adapter as? MyWeekPagerAdapter)?.refreshEvents(week_view_view_pager.currentItem)
+            else -> (main_view_pager.adapter as? MyMonthPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
         }
     }
 
     private fun tryImportEvents() {
-        if (hasReadStoragePermission()) {
-            importEvents()
-        } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), STORAGE_PERMISSION_IMPORT)
+        handlePermission(PERMISSION_READ_STORAGE) {
+            if (it) {
+                importEvents()
+            }
         }
     }
 
@@ -349,10 +455,10 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun tryExportEvents() {
-        if (hasReadStoragePermission()) {
-            exportEvents()
-        } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), STORAGE_PERMISSION_EXPORT)
+        handlePermission(PERMISSION_WRITE_STORAGE) {
+            if (it) {
+                exportEvents()
+            }
         }
     }
 
@@ -572,15 +678,15 @@ class MainActivity : SimpleActivity(), NavigationListener {
         mIsMonthSelected = true
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    private fun openDayAt(timestamp: Long) {
+        val dayCode = Formatter.getDayCodeFromTS((timestamp / 1000).toInt())
+        openDayCode(dayCode)
+    }
 
-        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            if (requestCode == STORAGE_PERMISSION_IMPORT) {
-                importEvents()
-            } else if (requestCode == STORAGE_PERMISSION_EXPORT) {
-                exportEvents()
-            }
+    private fun openDayCode(dayCode: String) {
+        Intent(this, DayActivity::class.java).apply {
+            putExtra(DAY_CODE, dayCode)
+            startActivity(this)
         }
     }
 
@@ -656,6 +762,8 @@ class MainActivity : SimpleActivity(), NavigationListener {
             add(Release(80, R.string.release_80))
             add(Release(84, R.string.release_84))
             add(Release(86, R.string.release_86))
+            add(Release(88, R.string.release_88))
+            add(Release(98, R.string.release_98))
             checkWhatsNew(this, BuildConfig.VERSION_CODE)
         }
     }

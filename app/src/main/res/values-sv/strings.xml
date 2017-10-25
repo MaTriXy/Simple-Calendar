@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Simple Calendar</string>
     <string name="app_launcher_name">Kalender</string>
@@ -6,7 +7,7 @@
     <string name="monthly_view">Månadsvy</string>
     <string name="yearly_view">Årsvy</string>
     <string name="simple_event_list">Händelselista</string>
-    <string name="no_upcoming_events">Det ser ut som att du inte har några kommandechändelser.</string>
+    <string name="no_upcoming_events">Det ser ut som att du inte har några kommande händelser.</string>
     <string name="add_some_events">Du kan lägga till händelser via plus-knappen som du ser längst ner.</string>
     <string name="details">Detaljer</string>
     <string name="go_to_today">Gå till idag</string>
@@ -22,9 +23,9 @@
     <string name="edit_event">Redigera händelse</string>
     <string name="new_event">Ny händelse</string>
     <string name="title_empty">Titeln får inte vara tom</string>
-    <string name="end_before_start">Händelsen kan inte sluta före den har startat</string>
+    <string name="end_before_start">Händelsen kan inte sluta innan den har startat</string>
     <string name="event_added">Händelsen tillagd</string>
-    <string name="past_event_added">Händelsen ät tillagd</string>
+    <string name="past_event_added">Händelsen är tillagd</string>
     <string name="event_updated">Händelsen uppdaterad</string>
     <string name="filter">Filtrera</string>
     <string name="filter_events_by_type">Filtrera händelser efter typ</string>
@@ -78,24 +79,31 @@
     <string name="last_f">sista</string>
 
     <plurals name="days">
-        <item quantity="one">%1$d dag</item>
-        <item quantity="other">%1$d dagar</item>
+        <item quantity="one">%d dag</item>
+        <item quantity="other">%d dagar</item>
     </plurals>
 
     <plurals name="weeks">
-        <item quantity="one">%1$d vecka</item>
-        <item quantity="other">%1$d veckor</item>
+        <item quantity="one">%d vecka</item>
+        <item quantity="other">%d veckor</item>
     </plurals>
 
     <plurals name="months">
-        <item quantity="one">%1$d månad</item>
-        <item quantity="other">%1$d månader</item>
+        <item quantity="one">%d månad</item>
+        <item quantity="other">%d månader</item>
     </plurals>
 
     <plurals name="years">
-        <item quantity="one">%1$d år</item>
-        <item quantity="other">%1$d år</item>
+        <item quantity="one">%d år</item>
+        <item quantity="other">%d år</item>
     </plurals>
+
+    <!-- Birthdays -->
+    <string name="birthdays">Birthdays</string>
+    <string name="add_birthdays">Add contact birthdays</string>
+    <string name="no_contacts_permission">Cannot obtain birthdays without the Contacts permission</string>
+    <string name="no_birthdays">No birthdays have been found</string>
+    <string name="birthdays_added">Birthdays added successfully</string>
 
     <!-- Event Reminders -->
     <string name="reminder">Påminnelse</string>
@@ -109,23 +117,23 @@
     <string name="add_another_reminder">Lägg till en annan påminnelse</string>
 
     <plurals name="minutes_before">
-        <item quantity="one">%1$d minut före</item>
-        <item quantity="other">%1$d minuter före</item>
+        <item quantity="one">%d minut före</item>
+        <item quantity="other">%d minuter före</item>
     </plurals>
 
     <plurals name="hours_before">
-        <item quantity="one">%1$d timme före</item>
-        <item quantity="other">%1$d timmar före</item>
+        <item quantity="one">%d timme före</item>
+        <item quantity="other">%d timmar före</item>
     </plurals>
 
     <plurals name="days_before">
-        <item quantity="one">%1$d dag före</item>
-        <item quantity="other">%1$d dagar före</item>
+        <item quantity="one">%d dag före</item>
+        <item quantity="other">%d dagar före</item>
     </plurals>
 
     <!-- Export / Import -->
-    <string name="importing">Importerar&#8230;</string>
-    <string name="exporting">Exporterar&#8230;</string>
+    <string name="importing">Importerar…</string>
+    <string name="exporting">Exporterar…</string>
     <string name="import_events">Importera händelser</string>
     <string name="export_events">Exportera händelser</string>
     <string name="import_events_from_ics">Importera händelser från en .ics-fil</string>
@@ -136,16 +144,16 @@
     <string name="exporting_events_failed">Händelser kunde inte exporteras</string>
     <string name="importing_some_events_failed">Vissa händelser kunde inte importeras</string>
     <string name="exporting_some_events_failed">Vissa händelser kunde inte exporteras</string>
-    <string name="invalid_file_format">Ogiltigt filformat</string>
     <string name="default_event_type">Standardhändelsetyp</string>
     <string name="no_events_for_exporting">Inga händelser har hittats för exportering</string>
     <string name="export_past_events_too">Exportera även tidigare händelser</string>
     <string name="include_event_types">Inkludera händelsetyper</string>
     <string name="filename_without_ics">Filnamn (utan .ics)</string>
-    <string name="no_title">No title</string>
+    <string name="no_title">Ingen titel</string>
 
     <!-- Event details -->
     <string name="title">Titel</string>
+    <string name="location">Location</string>
     <string name="description">Beskrivning</string>
     <string name="all_day">Heldag</string>
 
@@ -163,7 +171,7 @@
     <string name="select_event_type">Välj en händelsetyp</string>
     <string name="move_events_into_default">Flytta berörda händelser till standardhändelsetypen</string>
     <string name="remove_affected_events">Ta bort berörda händelser permanent</string>
-    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
+    <string name="unsync_caldav_calendar">Du måste sluta synkronisera CalDAV-kalendern innan du kan ta bort den</string>
 
     <!-- Holidays -->
     <string name="holidays">Helgdagar</string>
@@ -187,29 +195,33 @@
     <string name="no_ringtone_picker">Hittade ingen app som kan ställa in ljudet</string>
     <string name="no_ringtone_selected">Ingen</string>
     <string name="day_end_before_start">Dagen kan inte börja innan den tar slut</string>
-    <string name="caldav_sync">CalDAV sync</string>
+    <string name="caldav_sync">CalDAV-synkronisering</string>
+    <string name="event_lists">Event lists</string>
     <string name="display_past_events">Visa tidigare händelser</string>
     <string name="snooze_delay">Skjut upp påminnelse med Snooza</string>
-    <string name="widgets">Widgets</string>
+    <string name="widgets">Widgetar</string>
+    <string name="replace_description_with_location">Replace Description with Location at list view entries</string>
 
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
-    <string name="select_caldav_calendars">Select calendars to sync</string>
-    <string name="manage_synced_calendars">Manage synced calendars</string>
-    <string name="store_locally_only">Store locally only</string>
-    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
-    <string name="refreshing">Refreshing…</string>
-    <string name="refreshing_complete">Refreshing complete</string>
-    <string name="editing_calendar_failed">Editing calendar failed</string>
+    <string name="select_caldav_calendars">Välj de kalendrar som du vill synkronisera</string>
+    <string name="manage_synced_calendars">Hantera synkroniserade kalendrar</string>
+    <string name="store_locally_only">Spara bara lokalt</string>
+    <string name="refresh_caldav_calendars">Uppdatera CalDAV-kalendrar</string>
+    <string name="refreshing">Uppdaterar…</string>
+    <string name="refreshing_complete">Uppdateringen är klar</string>
+    <string name="editing_calendar_failed">Det gick inte att redigera kalendern</string>
+    <string name="syncing">Syncing…</string>
+    <string name="synchronization_completed">Sync completed</string>
 
     <plurals name="by_minutes">
-        <item quantity="one">%1$d minut</item>
-        <item quantity="other">%1$d minuter</item>
+        <item quantity="one">%d minut</item>
+        <item quantity="other">%d minuter</item>
     </plurals>
 
     <plurals name="by_hours">
-        <item quantity="one">%1$d timme</item>
-        <item quantity="other">%1$d timmar</item>
+        <item quantity="one">%d timme</item>
+        <item quantity="other">%d timmar</item>
     </plurals>
 
     <string name="never">Aldrig</string>
@@ -267,15 +279,15 @@
     <!-- Short description has to have less than 80 chars -->
     <string name="app_short_description">En enkel kalender med händelser, anpassningsbar widget och utan reklam.</string>
     <string name="app_long_description">
-        En fristående kalender utan några andra kalenderintegration. Du kan enkelt skapa återkommande händelser och ställa in påminnelser, den kan också visa veckonumret.
+        En fristående kalender utan någon annan kalenderintegration. Du kan enkelt skapa återkommande händelser och ställa in påminnelser, den kan också visa veckonumret.
 
-        Innehåller en skalbart 4x4 widget där du kan ändra textfärgen och färgen på bakgrunden.
+        Innehåller en skalbar 4x4 widget där du kan ändra textfärgen och färgen på bakgrunden.
 
         Innehåller ingen reklam eller onödiga behörigheter. Det är helt och hållet opensource, innehåller anpassningsbara färger.
 
         Lagringsbehörigheten behövs bara för att importera händelser från .ics-filer.
 
-        Internet and Contacts permissions are used only at Google sync.
+        Contacts permission is used only at importing contact birthdays.
 
         Detta är bara en app i en serie av appar. Du hittar resten av dem här http://www.simplemobiletools.com
     </string>

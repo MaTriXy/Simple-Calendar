@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Simple Calendar</string>
     <string name="app_launcher_name">Календарь</string>
@@ -11,7 +12,7 @@
     <string name="details">Подробности</string>
     <string name="go_to_today">Сегодня</string>
     <string name="no_app_for_ics">Не найдено приложение для просмотра файлов .ics</string>
-    <string name="snooze">Snooze</string>
+    <string name="snooze">Отложить</string>
 
     <!-- Widget titles -->
     <string name="widget_monthly">Календарь на месяц</string>
@@ -41,7 +42,7 @@
     <string name="years_raw">лет</string>
     <string name="repeat_till">Повторять до</string>
     <string name="forever">Бесконечно</string>
-    <string name="event_is_repeatable">The event is repeatable</string>
+    <string name="event_is_repeatable">Это событие может повторяться</string>
     <string name="selection_contains_repetition">В выбранном есть повторяющиеся события</string>
     <string name="delete_one_only">Удалить только выбранное</string>
     <string name="delete_all_occurrences">Удалить все связанные</string>
@@ -52,13 +53,13 @@
     <string name="repeat_forever">Повторять бесконечно</string>
     <string name="times">раз</string>
     <string name="repeat">Повторять</string>
-    <string name="repeat_on">Repeat on</string>
+    <string name="repeat_on">Повторять по</string>
     <string name="every_day">Каждый день</string>
     <string name="selected_days">В выбранные дни</string>
-    <string name="the_same_day">The same day</string>
-    <string name="the_last_day">The last day</string>
+    <string name="the_same_day">Этот же день</string>
+    <string name="the_last_day">Последний день</string>
     <string name="repeat_on_the_same_day">Повторять в этот же день каждый месяц</string>
-    <string name="repeat_on_the_last_day">Repeat on the last day of the month</string>
+    <string name="repeat_on_the_last_day">Повторять в последний день месяца</string>
     <string name="repeat_every_m">Repeat every</string>
     <string name="every_m">Every</string>
     <string name="first_m">first</string>
@@ -78,32 +79,39 @@
     <string name="last_f">last</string>
 
     <plurals name="days">
-        <item quantity="one">%1$d день</item>
-        <item quantity="few">%1$d дня</item>
-        <item quantity="many">%1$d дней</item>
-        <item quantity="other">%1$d дня(-ей)</item>
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дня(-ей)</item>
     </plurals>
 
     <plurals name="weeks">
-        <item quantity="one">%1$d неделя</item>
-        <item quantity="few">%1$d недели</item>
-        <item quantity="many">%1$d недель</item>
-        <item quantity="other">%1$d недели(-ль)</item>
+        <item quantity="one">%d неделя</item>
+        <item quantity="few">%d недели</item>
+        <item quantity="many">%d недель</item>
+        <item quantity="other">%d недели(-ль)</item>
     </plurals>
 
     <plurals name="months">
-        <item quantity="one">%1$d месяц</item>
-        <item quantity="few">%1$d месяца</item>
-        <item quantity="many">%1$d месяцев</item>
-        <item quantity="other">%1$d месяца(-ев)</item>
+        <item quantity="one">%d месяц</item>
+        <item quantity="few">%d месяца</item>
+        <item quantity="many">%d месяцев</item>
+        <item quantity="other">%d месяца(-ев)</item>
     </plurals>
 
     <plurals name="years">
-        <item quantity="one">%1$d год</item>
-        <item quantity="few">%1$d года</item>
-        <item quantity="many">%1$d лет</item>
-        <item quantity="other">%1$d года(лет)</item>
+        <item quantity="one">%d год</item>
+        <item quantity="few">%d года</item>
+        <item quantity="many">%d лет</item>
+        <item quantity="other">%d года(лет)</item>
     </plurals>
+
+    <!-- Birthdays -->
+    <string name="birthdays">Дни рождения</string>
+    <string name="add_birthdays">Добавить дни рождения контактов</string>
+    <string name="no_contacts_permission">Для получения дней рождения нужен доступ к контактам</string>
+    <string name="no_birthdays">Дни рождения не найдены</string>
+    <string name="birthdays_added">Дни рождения успешно добавлены</string>
 
     <!-- Event Reminders -->
     <string name="reminder">Напоминание</string>
@@ -117,24 +125,24 @@
     <string name="add_another_reminder">Добавить ещё одно напоминание</string>
 
     <plurals name="minutes_before">
-        <item quantity="one">%1$d минута до события</item>
-        <item quantity="few">%1$d минуты до события</item>
-        <item quantity="many">%1$d минут до события</item>
-        <item quantity="other">%1$d минут(-ы) до события</item>
+        <item quantity="one">%d минута до события</item>
+        <item quantity="few">%d минуты до события</item>
+        <item quantity="many">%d минут до события</item>
+        <item quantity="other">%d минут(-ы) до события</item>
     </plurals>
 
     <plurals name="hours_before">
-        <item quantity="one">%1$d час до события</item>
-        <item quantity="few">%1$d часа до события</item>
-        <item quantity="many">%1$d часов до события</item>
-        <item quantity="other">%1$d часа(-ов) до события</item>
+        <item quantity="one">%d час до события</item>
+        <item quantity="few">%d часа до события</item>
+        <item quantity="many">%d часов до события</item>
+        <item quantity="other">%d часа(-ов) до события</item>
     </plurals>
 
     <plurals name="days_before">
-        <item quantity="one">%1$d день до события</item>
-        <item quantity="few">%1$d дня до события</item>
-        <item quantity="many">%1$d дней до события</item>
-        <item quantity="other">%1$d дня(-ей) до события</item>
+        <item quantity="one">%d день до события</item>
+        <item quantity="few">%d дня до события</item>
+        <item quantity="many">%d дней до события</item>
+        <item quantity="other">%d дня(-ей) до события</item>
     </plurals>
 
     <!-- Export / Import -->
@@ -150,16 +158,16 @@
     <string name="exporting_events_failed">Не удалось экспортировать события</string>
     <string name="importing_some_events_failed">Не удалось импортировать некоторые события</string>
     <string name="exporting_some_events_failed">Не удалось экспортировать некоторые события</string>
-    <string name="invalid_file_format">Неправильный формат файла</string>
     <string name="default_event_type">Тип события по умолчанию</string>
     <string name="no_events_for_exporting">Не найдено событий для экспорта</string>
     <string name="export_past_events_too">Экспортировать прошедшие события</string>
     <string name="include_event_types">Включать типы событий</string>
     <string name="filename_without_ics">Имя файла (без .ics)</string>
-    <string name="no_title">No title</string>
+    <string name="no_title">Без заголовка</string>
 
     <!-- Event details -->
     <string name="title">Заголовок</string>
+    <string name="location">Место</string>
     <string name="description">Описание</string>
     <string name="all_day">Весь день</string>
 
@@ -175,9 +183,9 @@
     <string name="regular_event">Обычное событие</string>
     <string name="cannot_delete_default_type">Тип событий по умолчанию не может быть удалён</string>
     <string name="select_event_type">Выбрать тип события</string>
-    <string name="move_events_into_default">Move affected events into the default event type</string>
-    <string name="remove_affected_events">Permanently remove affected events</string>
-    <string name="unsync_caldav_calendar">To remove a CalDAV calendar you have to unsynchronize it</string>
+    <string name="move_events_into_default">Установить затронутым событиям тип по умолчанию</string>
+    <string name="remove_affected_events">Навсегда удалить затронутые события</string>
+    <string name="unsync_caldav_calendar">Чтобы удалить календарь CalDAV, нужно отключить синхронизацию с ним</string>
 
     <!-- Holidays -->
     <string name="holidays">Праздники</string>
@@ -201,31 +209,35 @@
     <string name="no_ringtone_picker">Не найдено приложение для выбора рингтона</string>
     <string name="no_ringtone_selected">Нет</string>
     <string name="day_end_before_start">Конец дня не может быть раньше начала</string>
-    <string name="caldav_sync">CalDAV sync</string>
+    <string name="caldav_sync">Синхронизация по CalDAV</string>
+    <string name="event_lists">Списки событий</string>
     <string name="display_past_events">Показывать прошедшие события</string>
-    <string name="snooze_delay">Postpone reminder with Snooze by</string>
-    <string name="widgets">Widgets</string>
+    <string name="snooze_delay">Отложить напоминание на</string>
+    <string name="widgets">Виджеты</string>
+    <string name="replace_description_with_location">Показывать место вместо описания в списке событий</string>
 
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
-    <string name="select_caldav_calendars">Select calendars to sync</string>
-    <string name="manage_synced_calendars">Manage synced calendars</string>
-    <string name="store_locally_only">Store locally only</string>
-    <string name="refresh_caldav_calendars">Refresh CalDAV calendars</string>
-    <string name="refreshing">Refreshing…</string>
-    <string name="refreshing_complete">Refreshing complete</string>
-    <string name="editing_calendar_failed">Editing calendar failed</string>
+    <string name="select_caldav_calendars">Выберите календари для синхронизации</string>
+    <string name="manage_synced_calendars">Управление календарями для синхронизации</string>
+    <string name="store_locally_only">Хранить только локально</string>
+    <string name="refresh_caldav_calendars">Обновить календари из CalDAV</string>
+    <string name="refreshing">Обновление…</string>
+    <string name="refreshing_complete">Обновление завершено</string>
+    <string name="editing_calendar_failed">Не удалось изменить календарь</string>
+    <string name="syncing">Синхронизация…</string>
+    <string name="synchronization_completed">Синхронизация завершена</string>
 
     <plurals name="by_minutes">
-        <item quantity="one">%1$d минута</item>
-        <item quantity="few">%1$d минуты</item>
-        <item quantity="many">%1$d минут</item>
+        <item quantity="one">%d минута</item>
+        <item quantity="few">%d минуты</item>
+        <item quantity="many">%d минут</item>
     </plurals>
 
     <plurals name="by_hours">
-        <item quantity="one">%1$d час</item>
-        <item quantity="few">%1$d часа</item>
-        <item quantity="many">%1$d часов</item>
+        <item quantity="one">%d час</item>
+        <item quantity="few">%d часа</item>
+        <item quantity="many">%d часов</item>
     </plurals>
 
     <string name="never">Никогда</string>
@@ -291,7 +303,7 @@
 
         Разрешение для доступа к памяти требуется только для экспорта или импорта событий из файлов .ics.
 
-        Internet and Contacts permissions are used only at Google sync.
+        Разрешение на чтение контактов требуется только при импорте дней рождения.
 
         Это приложение является лишь частью более крупной серии приложений. Вы можете найти остальные на http://www.simplemobiletools.com
     </string>

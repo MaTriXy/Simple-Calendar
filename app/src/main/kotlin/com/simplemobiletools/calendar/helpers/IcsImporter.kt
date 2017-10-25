@@ -1,11 +1,14 @@
 package com.simplemobiletools.calendar.helpers
 
 import android.content.Context
+import android.widget.Toast
 import com.simplemobiletools.calendar.R
+import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.helpers.IcsImporter.ImportResult.*
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.EventType
+import com.simplemobiletools.commons.extensions.showErrorToast
 import java.io.File
 
 class IcsImporter {
@@ -13,34 +16,35 @@ class IcsImporter {
         IMPORT_FAIL, IMPORT_OK, IMPORT_PARTIAL
     }
 
-    var curStart = -1
-    var curEnd = -1
-    var curTitle = ""
-    var curDescription = ""
-    var curImportId = ""
-    var curFlags = 0
-    var curReminderMinutes = ArrayList<Int>()
-    var curRepeatExceptions = ArrayList<Int>()
-    var curRepeatInterval = 0
-    var curRepeatLimit = 0
-    var curRepeatRule = 0
-    var curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
-    var curLastModified = 0L
-    var isNotificationDescription = false
-    var lastReminderAction = ""
+    private var curStart = -1
+    private var curEnd = -1
+    private var curTitle = ""
+    private var curDescription = ""
+    private var curImportId = ""
+    private var curFlags = 0
+    private var curReminderMinutes = ArrayList<Int>()
+    private var curRepeatExceptions = ArrayList<Int>()
+    private var curRepeatInterval = 0
+    private var curRepeatLimit = 0
+    private var curRepeatRule = 0
+    private var curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
+    private var curLastModified = 0L
+    private var curLocation = ""
+    private var isNotificationDescription = false
+    private var lastReminderAction = ""
 
-    var eventsImported = 0
-    var eventsFailed = 0
+    private var eventsImported = 0
+    private var eventsFailed = 0
 
-    fun importEvents(context: Context, path: String, defaultEventType: Int): ImportResult {
+    fun importEvents(activity: SimpleActivity, path: String, defaultEventType: Int): ImportResult {
         try {
-            val importIDs = context.dbHelper.getImportIds()
+            val existingEvents = activity.dbHelper.getEventsWithImportIds()
             var prevLine = ""
 
             val inputStream = if (path.contains("/")) {
                 File(path).inputStream()
             } else {
-                context.assets.open(path)
+                activity.assets.open(path)
             }
 
             inputStream.bufferedReader().use {
@@ -70,7 +74,7 @@ class IcsImporter {
                     } else if (line.startsWith(DESCRIPTION) && !isNotificationDescription) {
                         curDescription = line.substring(DESCRIPTION.length).replace("\\n", "\n")
                     } else if (line.startsWith(UID)) {
-                        curImportId = line.substring(UID.length)
+                        curImportId = line.substring(UID.length).trim()
                     } else if (line.startsWith(RRULE)) {
                         val repeatRule = Parser().parseRepeatInterval(line.substring(RRULE.length), curStart)
                         curRepeatRule = repeatRule.repeatRule
@@ -84,54 +88,66 @@ class IcsImporter {
                             curReminderMinutes.add(Parser().parseDurationSeconds(line.substring(TRIGGER.length)) / 60)
                     } else if (line.startsWith(CATEGORIES)) {
                         val categories = line.substring(CATEGORIES.length)
-                        tryAddCategories(categories, context)
+                        tryAddCategories(categories, activity)
                     } else if (line.startsWith(LAST_MODIFIED)) {
                         curLastModified = getTimestamp(line.substring(LAST_MODIFIED.length)) * 1000L
                     } else if (line.startsWith(EXDATE)) {
                         curRepeatExceptions.add(getTimestamp(line.substring(EXDATE.length)))
+                    } else if (line.startsWith(LOCATION)) {
+                        curLocation = line.substring(LOCATION.length)
                     } else if (line == END_EVENT) {
-                        if (curTitle.isEmpty() || curStart == -1 || curEnd == -1 || importIDs.contains(curImportId))
+                        if (curStart != -1 && curEnd == -1)
+                            curEnd = curStart
+
+                        if (curTitle.isEmpty() || curStart == -1)
                             continue
 
-                        if (curImportId.isNotEmpty())
-                            importIDs.add(curImportId)
+                        val eventToUpdate = existingEvents.firstOrNull { curImportId == it.importId }
+                        if (eventToUpdate != null && eventToUpdate.lastUpdated >= curLastModified) {
+                            continue
+                        }
 
                         val event = Event(0, curStart, curEnd, curTitle, curDescription, curReminderMinutes.getOrElse(0, { -1 }),
                                 curReminderMinutes.getOrElse(1, { -1 }), curReminderMinutes.getOrElse(2, { -1 }), curRepeatInterval,
                                 curImportId, curFlags, curRepeatLimit, curRepeatRule, curEventType, lastUpdated = curLastModified,
-                                source = SOURCE_IMPORTED_ICS)
+                                source = SOURCE_IMPORTED_ICS, location = curLocation)
 
                         if (event.getIsAllDay() && curEnd > curStart) {
                             event.endTS -= DAY
                         }
 
-                        context.dbHelper.insert(event, true) {
-                            for (exceptionTS in curRepeatExceptions) {
-                                context.dbHelper.addEventRepeatException(it, exceptionTS)
+                        if (eventToUpdate == null) {
+                            activity.dbHelper.insert(event, false) {
+                                for (exceptionTS in curRepeatExceptions) {
+                                    activity.dbHelper.addEventRepeatException(it, exceptionTS)
+                                }
+                                existingEvents.add(event)
                             }
-                            eventsImported++
-                            resetValues()
+                        } else {
+                            event.id = eventToUpdate.id
+                            activity.dbHelper.update(event, true) {}
                         }
+                        eventsImported++
+                        resetValues()
                     }
                     prevLine = line
                 }
             }
         } catch (e: Exception) {
+            activity.showErrorToast(e, Toast.LENGTH_LONG)
             eventsFailed++
         }
 
-        return if (eventsImported == 0) {
-            IMPORT_FAIL
-        } else if (eventsFailed > 0) {
-            IMPORT_PARTIAL
-        } else {
-            IMPORT_OK
+        return when {
+            eventsImported == 0 -> IMPORT_FAIL
+            eventsFailed > 0 -> IMPORT_PARTIAL
+            else -> IMPORT_OK
         }
     }
 
     private fun getTimestamp(fullString: String): Int {
-        try {
-            return if (fullString.startsWith(';')) {
+        return try {
+            if (fullString.startsWith(';')) {
                 val value = fullString.substring(fullString.lastIndexOf(':') + 1)
                 if (!value.contains("T"))
                     curFlags = curFlags or FLAG_ALL_DAY
@@ -142,7 +158,7 @@ class IcsImporter {
             }
         } catch (e: Exception) {
             eventsFailed++
-            return -1
+            -1
         }
     }
 
@@ -154,11 +170,11 @@ class IcsImporter {
         }
 
         val eventId = context.dbHelper.getEventTypeIdWithTitle(eventTypeTitle)
-        if (eventId == -1) {
+        curEventType = if (eventId == -1) {
             val eventType = EventType(0, eventTypeTitle, context.resources.getColor(R.color.color_primary))
-            curEventType = context.dbHelper.insertEventType(eventType)
+            context.dbHelper.insertEventType(eventType)
         } else {
-            curEventType = eventId
+            eventId
         }
     }
 
@@ -177,13 +193,14 @@ class IcsImporter {
         curDescription = ""
         curImportId = ""
         curFlags = 0
-        curReminderMinutes = ArrayList<Int>()
-        curRepeatExceptions = ArrayList<Int>()
+        curReminderMinutes = ArrayList()
+        curRepeatExceptions = ArrayList()
         curRepeatInterval = 0
         curRepeatLimit = 0
         curRepeatRule = 0
         curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
         curLastModified = 0L
+        curLocation = ""
         isNotificationDescription = false
         lastReminderAction = ""
     }

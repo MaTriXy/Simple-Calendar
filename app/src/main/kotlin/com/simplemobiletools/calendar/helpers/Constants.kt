@@ -23,7 +23,7 @@ val REMINDER_OFF = -1
 
 val DAY = 86400
 val WEEK = 604800
-val MONTH = 2592000    // exact value not taken into account, Joda is used for adding months and years
+val MONTH = 2592001    // exact value not taken into account, Joda is used for adding months and years
 val YEAR = 31536000
 
 val DAY_MINUTES = 24 * 60
@@ -47,6 +47,8 @@ val CALDAV_SYNCED_CALENDAR_IDS = "caldav_synced_calendar_ids"
 val LAST_USED_CALDAV_CALENDAR = "last_used_caldav_calendar"
 val SNOOZE_DELAY = "snooze_delay"
 val DISPLAY_PAST_EVENTS = "display_past_events"
+val REPLACE_DESCRIPTION = "replace_description"
+val GOOGLE_SYNC = "google_sync" // deprecated
 
 val letterIDs = intArrayOf(R.string.sunday_letter, R.string.monday_letter, R.string.tuesday_letter, R.string.wednesday_letter,
         R.string.thursday_letter, R.string.friday_letter, R.string.saturday_letter)
@@ -91,6 +93,7 @@ val STATUS = "STATUS:"
 val EXDATE = "EXDATE"
 val BYDAY = "BYDAY"
 val BYMONTHDAY = "BYMONTHDAY"
+val LOCATION = "LOCATION:"
 
 val DISPLAY = "DISPLAY"
 val FREQ = "FREQ"
@@ -121,3 +124,7 @@ val FONT_SIZE_LARGE = 2
 
 val SOURCE_SIMPLE_CALENDAR = "simple-calendar"
 val SOURCE_IMPORTED_ICS = "imported-ics"
+val SOURCE_CONTACT_BIRTHDAY = "contact-birthday"
+
+// deprecated
+val SOURCE_GOOGLE_CALENDAR = 1
