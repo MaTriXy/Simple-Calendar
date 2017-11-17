@@ -74,6 +74,8 @@ val FLAG_ALL_DAY = 1
 // constants related to ICS file exporting / importing
 val BEGIN_CALENDAR = "BEGIN:VCALENDAR"
 val END_CALENDAR = "END:VCALENDAR"
+val CALENDAR_PRODID = "PRODID:-//Simple Mobile Tools//NONSGML Event Calendar//EN"
+val CALENDAR_VERSION = "VERSION:2.0"
 val BEGIN_EVENT = "BEGIN:VEVENT"
 val END_EVENT = "END:VEVENT"
 val BEGIN_ALARM = "BEGIN:VALARM"
@@ -125,6 +127,7 @@ val FONT_SIZE_LARGE = 2
 val SOURCE_SIMPLE_CALENDAR = "simple-calendar"
 val SOURCE_IMPORTED_ICS = "imported-ics"
 val SOURCE_CONTACT_BIRTHDAY = "contact-birthday"
+val SOURCE_CONTACT_ANNIVERSARY = "contact-anniversary"
 
 // deprecated
 val SOURCE_GOOGLE_CALENDAR = 1

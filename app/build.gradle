@@ -3,16 +3,17 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.3"
+    compileSdkVersion 27
+    buildToolsVersion "27.0.1"
 
     defaultConfig {
         applicationId "com.simplemobiletools.calendar"
         minSdkVersion 16
-        targetSdkVersion 25
-        versionCode 98
-        versionName "2.9.0"
+        targetSdkVersion 27
+        versionCode 103
+        versionName "2.11.0"
         multiDexEnabled true
+        setProperty("archivesBaseName", "calendar")
     }
 
     signingConfigs {
@@ -20,17 +21,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField "boolean", "USE_LEAK_CANARY", "true"
+        }
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            buildConfigField "boolean", "USE_LEAK_CANARY", "false"
         }
     }
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
-        debug.java.srcDirs += 'src/debug/kotlin'
-        release.java.srcDirs += 'src/release/kotlin'
     }
 
     lintOptions {
@@ -40,16 +43,15 @@ android {
 }
 
 ext {
-    leakCanaryVersion = '1.5.2'
+    leakCanaryVersion = '1.5.4'
 }
 
 dependencies {
-    compile 'com.simplemobiletools:commons:2.31.1'
-    compile 'joda-time:joda-time:2.9.1'
-    compile 'com.facebook.stetho:stetho:1.4.1'
-    compile 'com.bignerdranch.android:recyclerview-multiselect:0.2'
-    compile 'com.android.support:multidex:1.0.1'
-    compile 'com.google.code.gson:gson:2.8.0'
+    compile 'com.simplemobiletools:commons:2.39.9'
+    compile 'joda-time:joda-time:2.9.9'
+    compile 'com.facebook.stetho:stetho:1.5.0'
+    compile 'com.android.support:multidex:1.0.2'
+    compile 'com.google.code.gson:gson:2.8.2'
     compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
     debugCompile "com.squareup.leakcanary:leakcanary-android:$leakCanaryVersion"
@@ -57,7 +59,7 @@ dependencies {
 }
 
 buildscript {
-    ext.kotlin_version = '1.1.51'
+    ext.kotlin_version = '1.1.60'
     repositories {
         mavenCentral()
     }
@@ -79,7 +81,7 @@ if (propFile.canRead()) {
         android.signingConfigs.release.keyAlias = props['KEY_ALIAS']
         android.signingConfigs.release.keyPassword = props['PASSWORD']
     } else {
-        println 'signing.properties found but some release entries are missing'
+        println 'signing.properties found but some entries are missing'
         android.buildTypes.release.signingConfig = null
     }
 } else {

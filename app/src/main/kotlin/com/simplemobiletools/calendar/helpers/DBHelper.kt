@@ -147,8 +147,12 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
         if (oldVersion < 13) {
             try {
                 createExceptionsTable(db)
-            } catch (ignored: SQLiteException) {
-                db.execSQL("ALTER TABLE $EXCEPTIONS_TABLE_NAME ADD COLUMN $COL_CHILD_EVENT_ID INTEGER NOT NULL DEFAULT 0")
+            } catch (e: Exception) {
+                try {
+                    db.execSQL("ALTER TABLE $EXCEPTIONS_TABLE_NAME ADD COLUMN $COL_CHILD_EVENT_ID INTEGER NOT NULL DEFAULT 0")
+                } catch (e: Exception) {
+
+                }
             }
         }
 
@@ -397,6 +401,13 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
     fun getBirthdays(): List<Event> {
         val selection = "$MAIN_TABLE_NAME.$COL_EVENT_SOURCE = ?"
         val selectionArgs = arrayOf(SOURCE_CONTACT_BIRTHDAY)
+        val cursor = getEventsCursor(selection, selectionArgs)
+        return fillEvents(cursor)
+    }
+
+    fun getAnniversaries(): List<Event> {
+        val selection = "$MAIN_TABLE_NAME.$COL_EVENT_SOURCE = ?"
+        val selectionArgs = arrayOf(SOURCE_CONTACT_ANNIVERSARY)
         val cursor = getEventsCursor(selection, selectionArgs)
         return fillEvents(cursor)
     }
@@ -791,8 +802,8 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
         }
 
         val events = ArrayList<Event>()
-        cursor.use { cursor ->
-            if (cursor != null && cursor.moveToFirst()) {
+        cursor?.use {
+            if (cursor.moveToFirst()) {
                 do {
                     val id = cursor.getIntValue(COL_ID)
                     val startTS = cursor.getIntValue(COL_START_TS)

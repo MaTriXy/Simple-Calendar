@@ -2,7 +2,6 @@ package com.simplemobiletools.calendar.fragments
 
 import android.content.Intent
 import android.content.res.Resources
-import android.graphics.PorterDuff
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -22,7 +21,7 @@ import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.interfaces.WeeklyCalendar
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.views.MyScrollView
-import com.simplemobiletools.commons.extensions.adjustAlpha
+import com.simplemobiletools.commons.extensions.applyColorFilter
 import com.simplemobiletools.commons.extensions.beGone
 import com.simplemobiletools.commons.extensions.getContrastColor
 import kotlinx.android.synthetic.main.fragment_week.*
@@ -60,10 +59,10 @@ class WeekFragment : Fragment(), WeeklyCalendar {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         this.inflater = inflater
-        mRowHeight = (context.resources.getDimension(R.dimen.weekly_view_row_height)).toInt()
-        minScrollY = mRowHeight * context.config.startWeeklyAt
-        mWeekTimestamp = arguments.getInt(WEEK_START_TIMESTAMP)
-        primaryColor = context.config.primaryColor
+        mRowHeight = (context!!.resources.getDimension(R.dimen.weekly_view_row_height)).toInt()
+        minScrollY = mRowHeight * context!!.config.startWeeklyAt
+        mWeekTimestamp = arguments!!.getInt(WEEK_START_TIMESTAMP)
+        primaryColor = context!!.config.primaryColor
         mRes = resources
         allDayRows.add(HashSet())
 
@@ -85,7 +84,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
         (0..6).map { inflater.inflate(R.layout.stroke_vertical_divider, mView.week_vertical_grid_holder) }
         (0..23).map { inflater.inflate(R.layout.stroke_horizontal_divider, mView.week_horizontal_grid_holder) }
 
-        mCalendar = WeeklyCalendarImpl(this, context)
+        mCalendar = WeeklyCalendarImpl(this, context!!)
         wasFragmentInit = true
         return mView
     }
@@ -115,8 +114,8 @@ class WeekFragment : Fragment(), WeeklyCalendar {
                     return
 
                 mView.week_events_scrollview.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                minScrollY = mRowHeight * context.config.startWeeklyAt
-                maxScrollY = mRowHeight * context.config.endWeeklyAt
+                minScrollY = mRowHeight * context!!.config.startWeeklyAt
+                maxScrollY = mRowHeight * context!!.config.endWeeklyAt
 
                 val bounds = Rect()
                 week_events_holder.getGlobalVisibleRect(bounds)
@@ -131,12 +130,12 @@ class WeekFragment : Fragment(), WeeklyCalendar {
 
     private fun setupDayLabels() {
         var curDay = Formatter.getDateTimeFromTS(mWeekTimestamp)
-        val textColor = context.config.textColor
+        val textColor = context!!.config.textColor
         val todayCode = Formatter.getDayCodeFromDateTime(DateTime())
         for (i in 0..6) {
             val dayCode = Formatter.getDayCodeFromDateTime(curDay)
             val dayLetter = getDayLetter(curDay.dayOfWeek)
-            (mView.findViewById(mRes.getIdentifier("week_day_label_$i", "id", context.packageName)) as TextView).apply {
+            mView.findViewById<TextView>(mRes.getIdentifier("week_day_label_$i", "id", context!!.packageName)).apply {
                 text = "$dayLetter\n${curDay.dayOfMonth}"
                 setTextColor(if (todayCode == dayCode) primaryColor else textColor)
                 if (todayCode == dayCode)
@@ -230,19 +229,19 @@ class WeekFragment : Fragment(), WeeklyCalendar {
         if (mWasDestroyed)
             return
 
-        activity.runOnUiThread {
+        activity!!.runOnUiThread {
             if (context != null && isAdded)
                 addEvents()
         }
     }
 
     private fun addEvents() {
-        val filtered = context.getFilteredEvents(events)
+        val filtered = context!!.getFilteredEvents(events)
 
         initGrid()
         allDayHolders.clear()
         allDayRows.clear()
-        allDayRows.add(HashSet<Int>())
+        allDayRows.add(HashSet())
         week_all_day_holder?.removeAllViews()
 
         addNewLine()
@@ -252,7 +251,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
         val minimalHeight = mRes.getDimension(R.dimen.weekly_view_minimal_event_height).toInt()
 
         var hadAllDayEvent = false
-        val replaceDescription = context.config.replaceDescription
+        val replaceDescription = context!!.config.replaceDescription
         val sorted = filtered.sortedWith(compareBy({ it.startTS }, { it.endTS }, { it.title }, { if (replaceDescription) it.location else it.description }))
         for (event in sorted) {
             if (event.getIsAllDay() || Formatter.getDayCodeFromTS(event.startTS) != Formatter.getDayCodeFromTS(event.endTS)) {
@@ -261,7 +260,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
             } else {
                 val startDateTime = Formatter.getDateTimeFromTS(event.startTS)
                 val endDateTime = Formatter.getDateTimeFromTS(event.endTS)
-                val dayOfWeek = startDateTime.plusDays(if (context.config.isSundayFirst) 1 else 0).dayOfWeek - 1
+                val dayOfWeek = startDateTime.plusDays(if (context!!.config.isSundayFirst) 1 else 0).dayOfWeek - 1
                 val layout = getColumnWithId(dayOfWeek)
 
                 val startMinutes = startDateTime.minuteOfDay
@@ -270,7 +269,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
                 (inflater.inflate(R.layout.week_event_marker, null, false) as TextView).apply {
                     val backgroundColor = MainActivity.eventTypeColors.get(event.eventType, primaryColor)
                     background = ColorDrawable(backgroundColor)
-                    setTextColor(backgroundColor.getContrastColor().adjustAlpha(MEDIUM_ALPHA))
+                    setTextColor(backgroundColor.getContrastColor())
                     text = event.title
                     layout.addView(this)
                     y = startMinutes * minuteHeight
@@ -279,7 +278,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
                         minHeight = if (event.startTS == event.endTS) minimalHeight else (duration * minuteHeight).toInt() - 1
                     }
                     setOnClickListener {
-                        Intent(activity.applicationContext, EventActivity::class.java).apply {
+                        Intent(context, EventActivity::class.java).apply {
                             putExtra(EVENT_ID, event.id)
                             putExtra(EVENT_OCCURRENCE_TS, event.startTS)
                             startActivity(this)
@@ -307,7 +306,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
             val minutes = DateTime().minuteOfDay
             val todayColumn = getColumnWithId(todayColumnIndex)
             (inflater.inflate(R.layout.week_now_marker, null, false) as ImageView).apply {
-                setColorFilter(primaryColor, PorterDuff.Mode.SRC_IN)
+                applyColorFilter(primaryColor)
                 mView.week_events_holder.addView(this, 0)
                 val extraWidth = (todayColumn.width * 0.3).toInt()
                 val markerHeight = resources.getDimension(R.dimen.weekly_view_now_height).toInt()
@@ -339,7 +338,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
 
             val backgroundColor = MainActivity.eventTypeColors.get(event.eventType, primaryColor)
             background = ColorDrawable(backgroundColor)
-            setTextColor(backgroundColor.getContrastColor().adjustAlpha(MEDIUM_ALPHA))
+            setTextColor(backgroundColor.getContrastColor())
             text = event.title
 
             val startDateTime = Formatter.getDateTimeFromTS(event.startTS)
@@ -395,7 +394,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
             calculateExtraHeight()
 
             setOnClickListener {
-                Intent(activity.applicationContext, EventActivity::class.java).apply {
+                Intent(context, EventActivity::class.java).apply {
                     putExtra(EVENT_ID, event.id)
                     putExtra(EVENT_OCCURRENCE_TS, event.startTS)
                     startActivity(this)
@@ -428,7 +427,7 @@ class WeekFragment : Fragment(), WeeklyCalendar {
         mWasDestroyed = true
     }
 
-    private fun getColumnWithId(id: Int) = mView.findViewById(mRes.getIdentifier("week_column_$id", "id", context.packageName)) as ViewGroup
+    private fun getColumnWithId(id: Int) = mView.findViewById<ViewGroup>(mRes.getIdentifier("week_column_$id", "id", context!!.packageName))
 
     fun updateScrollY(y: Int) {
         if (wasFragmentInit)

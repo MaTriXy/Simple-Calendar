@@ -11,10 +11,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Color
-import android.graphics.PorterDuff
 import android.net.Uri
 import android.os.Build
-import android.support.v7.app.NotificationCompat
+import android.support.v4.app.NotificationCompat
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -36,10 +35,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 fun Context.updateWidgets() {
-    val widgetsCnt = AppWidgetManager.getInstance(this).getAppWidgetIds(ComponentName(this, MyWidgetMonthlyProvider::class.java))
+    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(this, MyWidgetMonthlyProvider::class.java))
     if (widgetsCnt.isNotEmpty()) {
         val ids = intArrayOf(R.xml.widget_monthly_info)
-        Intent(this, MyWidgetMonthlyProvider::class.java).apply {
+        Intent(applicationContext, MyWidgetMonthlyProvider::class.java).apply {
             action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
             sendBroadcast(this)
@@ -50,10 +49,10 @@ fun Context.updateWidgets() {
 }
 
 fun Context.updateListWidget() {
-    val widgetsCnt = AppWidgetManager.getInstance(this).getAppWidgetIds(ComponentName(this, MyWidgetListProvider::class.java))
+    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(this, MyWidgetListProvider::class.java))
     if (widgetsCnt.isNotEmpty()) {
         val ids = intArrayOf(R.xml.widget_list_info)
-        Intent(this, MyWidgetListProvider::class.java).apply {
+        Intent(applicationContext, MyWidgetListProvider::class.java).apply {
             action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
             sendBroadcast(this)
@@ -93,18 +92,19 @@ fun Context.scheduleEventIn(notifTS: Long, event: Event) {
     if (notifTS < System.currentTimeMillis())
         return
 
-    val pendingIntent = getNotificationIntent(this, event)
+    val pendingIntent = getNotificationIntent(applicationContext, event)
     val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    if (isKitkatPlus())
-        alarmManager.setExact(AlarmManager.RTC_WAKEUP, notifTS, pendingIntent)
-    else
-        alarmManager.set(AlarmManager.RTC_WAKEUP, notifTS, pendingIntent)
+    when {
+        isMarshmallowPlus() -> alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifTS, pendingIntent)
+        isKitkatPlus() -> alarmManager.setExact(AlarmManager.RTC_WAKEUP, notifTS, pendingIntent)
+        else -> alarmManager.set(AlarmManager.RTC_WAKEUP, notifTS, pendingIntent)
+    }
 }
 
 fun Context.cancelNotification(id: Int) {
-    val intent = Intent(this, NotificationReceiver::class.java)
-    PendingIntent.getBroadcast(this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT).cancel()
+    val intent = Intent(applicationContext, NotificationReceiver::class.java)
+    PendingIntent.getBroadcast(applicationContext, id, intent, PendingIntent.FLAG_UPDATE_CURRENT).cancel()
 }
 
 private fun getNotificationIntent(context: Context, event: Event): PendingIntent {
@@ -165,12 +165,12 @@ fun Context.notifyRunningEvents() {
 }
 
 fun Context.notifyEvent(event: Event) {
-    val pendingIntent = getPendingIntent(this, event)
-    val startTime = Formatter.getTimeFromTS(this, event.startTS)
-    val endTime = Formatter.getTimeFromTS(this, event.endTS)
+    val pendingIntent = getPendingIntent(applicationContext, event)
+    val startTime = Formatter.getTimeFromTS(applicationContext, event.startTS)
+    val endTime = Formatter.getTimeFromTS(applicationContext, event.endTS)
     val timeRange = if (event.getIsAllDay()) getString(R.string.all_day) else getFormattedEventTime(startTime, endTime)
     val descriptionOrLocation = if (config.replaceDescription) event.location else event.description
-    val notification = getNotification(this, pendingIntent, event, "$timeRange $descriptionOrLocation")
+    val notification = getNotification(applicationContext, pendingIntent, event, "$timeRange $descriptionOrLocation")
     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.notify(event.id, notification)
 }
@@ -231,20 +231,20 @@ fun Context.getNewEventTimestampFromCode(dayCode: String): Int {
 
 fun Context.getCurrentOffset() = SimpleDateFormat("Z", Locale.getDefault()).format(Date())
 
-fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(this).getCalDAVCalendars(null, config.caldavSyncedCalendarIDs)
+fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(applicationContext).getCalDAVCalendars(null, config.caldavSyncedCalendarIDs)
 
 fun Context.recheckCalDAVCalendars(callback: () -> Unit) {
     if (config.caldavSync) {
         Thread({
-            CalDAVHandler(this).refreshCalendars(null, callback)
+            CalDAVHandler(applicationContext).refreshCalendars(null, callback)
             updateWidgets()
         }).start()
     }
 }
 
 fun Context.scheduleCalDAVSync(activate: Boolean) {
-    val syncIntent = Intent(this, CalDAVSyncReceiver::class.java)
-    val pendingIntent = PendingIntent.getBroadcast(this, 0, syncIntent, PendingIntent.FLAG_CANCEL_CURRENT)
+    val syncIntent = Intent(applicationContext, CalDAVSyncReceiver::class.java)
+    val pendingIntent = PendingIntent.getBroadcast(applicationContext, 0, syncIntent, PendingIntent.FLAG_UPDATE_CURRENT)
     val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     if (activate) {
@@ -255,16 +255,16 @@ fun Context.scheduleCalDAVSync(activate: Boolean) {
     }
 }
 
-val Context.config: Config get() = Config.newInstance(this)
+val Context.config: Config get() = Config.newInstance(applicationContext)
 
-val Context.dbHelper: DBHelper get() = DBHelper.newInstance(this)
+val Context.dbHelper: DBHelper get() = DBHelper.newInstance(applicationContext)
 
 fun Context.addDayNumber(rawTextColor: Int, day: DayMonthly, linearLayout: LinearLayout, dayLabelHeight: Int, callback: (Int) -> Unit) {
     var textColor = rawTextColor
     if (!day.isThisMonth)
         textColor = textColor.adjustAlpha(LOW_ALPHA)
 
-    (View.inflate(this, R.layout.day_monthly_number_view, null) as TextView).apply {
+    (View.inflate(applicationContext, R.layout.day_monthly_number_view, null) as TextView).apply {
         setTextColor(textColor)
         text = day.value.toString()
         gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -273,7 +273,7 @@ fun Context.addDayNumber(rawTextColor: Int, day: DayMonthly, linearLayout: Linea
 
         if (day.isToday) {
             val primaryColor = config.primaryColor
-            setTextColor(config.primaryColor.getContrastColor().adjustAlpha(MEDIUM_ALPHA))
+            setTextColor(config.primaryColor.getContrastColor())
             if (dayLabelHeight == 0) {
                 onGlobalLayout {
                     val height = this@apply.height
@@ -293,20 +293,20 @@ private fun addTodaysBackground(textView: TextView, res: Resources, dayLabelHeig
         textView.addResizedBackgroundDrawable(res, dayLabelHeight, mPrimaryColor, R.drawable.monthly_today_circle)
 
 fun Context.addDayEvents(day: DayMonthly, linearLayout: LinearLayout, res: Resources, dividerMargin: Int) {
-    day.dayEvents.forEach {
-        val backgroundDrawable = res.getDrawable(R.drawable.day_monthly_event_background)
-        backgroundDrawable.mutate().setColorFilter(it.color, PorterDuff.Mode.SRC_IN)
+    val eventLayoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-        val eventLayoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    day.dayEvents.sortedWith(compareBy({ it.startTS }, { it.endTS }, { it.title })).forEach {
+        val backgroundDrawable = res.getDrawable(R.drawable.day_monthly_event_background)
+        backgroundDrawable.applyColorFilter(it.color)
         eventLayoutParams.setMargins(dividerMargin, 0, dividerMargin, dividerMargin)
 
-        var textColor = it.color.getContrastColor().adjustAlpha(MEDIUM_ALPHA)
+        var textColor = it.color.getContrastColor()
         if (!day.isThisMonth) {
             backgroundDrawable.alpha = 64
             textColor = textColor.adjustAlpha(0.25f)
         }
 
-        (View.inflate(this, R.layout.day_monthly_event_view, null) as TextView).apply {
+        (View.inflate(applicationContext, R.layout.day_monthly_event_view, null) as TextView).apply {
             setTextColor(textColor)
             text = it.title.replace(" ", "\u00A0")  // allow word break by char
             background = backgroundDrawable

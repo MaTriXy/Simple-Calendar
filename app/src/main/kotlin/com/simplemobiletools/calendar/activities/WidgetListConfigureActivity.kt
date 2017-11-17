@@ -6,10 +6,9 @@ import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Color
 import android.os.Bundle
-import android.support.v7.app.AppCompatActivity
 import android.widget.SeekBar
 import com.simplemobiletools.calendar.R
-import com.simplemobiletools.calendar.adapters.EventListWidgetAdapterOld
+import com.simplemobiletools.calendar.adapters.EventListAdapter
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.extensions.seconds
 import com.simplemobiletools.calendar.helpers.Formatter
@@ -23,7 +22,7 @@ import kotlinx.android.synthetic.main.widget_config_list.*
 import org.joda.time.DateTime
 import java.util.*
 
-class WidgetListConfigureActivity : AppCompatActivity() {
+class WidgetListConfigureActivity : SimpleActivity() {
     lateinit var mRes: Resources
     private var mPackageName = ""
 
@@ -34,7 +33,7 @@ class WidgetListConfigureActivity : AppCompatActivity() {
     private var mTextColorWithoutTransparency = 0
     private var mTextColor = 0
 
-    private var mEventsAdapter: EventListWidgetAdapterOld? = null
+    private var mEventsAdapter: EventListAdapter? = null
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,20 +49,28 @@ class WidgetListConfigureActivity : AppCompatActivity() {
         if (mWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID)
             finish()
 
-        mEventsAdapter = EventListWidgetAdapterOld(this, getListItems())
-        mEventsAdapter!!.setTextColor(mTextColor)
+        mEventsAdapter = EventListAdapter(this, getListItems(), false, null, config_events_list) {}
+        mEventsAdapter!!.updateTextColor(mTextColor)
         config_events_list.adapter = mEventsAdapter
 
         config_save.setOnClickListener { saveConfig() }
         config_bg_color.setOnClickListener { pickBackgroundColor() }
         config_text_color.setOnClickListener { pickTextColor() }
+
+        val primaryColor = config.primaryColor
+        config_bg_seekbar.setColors(mTextColor, primaryColor, primaryColor)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        window.decorView.setBackgroundColor(0)
     }
 
     private fun initVariables() {
         mRes = resources
 
         mTextColorWithoutTransparency = config.widgetTextColor
-        updateTextColors()
+        updateColors()
 
         mBgColor = config.widgetBgColor
         if (mBgColor == 1) {
@@ -79,7 +86,7 @@ class WidgetListConfigureActivity : AppCompatActivity() {
         updateBgColor()
     }
 
-    fun saveConfig() {
+    private fun saveConfig() {
         storeWidgetColors()
         requestWidgetUpdate()
 
@@ -97,17 +104,17 @@ class WidgetListConfigureActivity : AppCompatActivity() {
         }
     }
 
-    fun pickBackgroundColor() {
+    private fun pickBackgroundColor() {
         ColorPickerDialog(this, mBgColorWithoutTransparency) {
             mBgColorWithoutTransparency = it
             updateBgColor()
         }
     }
 
-    fun pickTextColor() {
+    private fun pickTextColor() {
         ColorPickerDialog(this, mTextColor) {
             mTextColorWithoutTransparency = it
-            updateTextColors()
+            updateColors()
         }
     }
 
@@ -118,9 +125,9 @@ class WidgetListConfigureActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTextColors() {
+    private fun updateColors() {
         mTextColor = mTextColorWithoutTransparency
-        mEventsAdapter?.setTextColor(mTextColor)
+        mEventsAdapter?.updateTextColor(mTextColor)
         config_text_color.setBackgroundColor(mTextColor)
         config_save.setTextColor(mTextColor)
     }

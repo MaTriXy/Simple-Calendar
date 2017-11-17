@@ -11,7 +11,6 @@
     <string name="add_some_events">You can add some with the Plus button at the bottom.</string>
     <string name="details">Dettagli</string>
     <string name="go_to_today">Go to today</string>
-    <string name="no_app_for_ics">Nessuna applicazione trovata capace di gestire l\'estensione .ics</string>
     <string name="snooze">Snooze</string>
 
     <!-- Widget titles -->
@@ -25,7 +24,6 @@
     <string name="title_empty">Il titolo non può essere vuoto</string>
     <string name="end_before_start">L\'evento non può terminare prima del suo inizio</string>
     <string name="event_added">Evento aggiunto correttamente</string>
-    <string name="past_event_added">Event in the past added successfully</string>
     <string name="event_updated">Evento aggiornato correttamente</string>
     <string name="filter">Filtro</string>
     <string name="filter_events_by_type">Filtra eventi per tipologia</string>
@@ -101,9 +99,14 @@
     <!-- Birthdays -->
     <string name="birthdays">Birthdays</string>
     <string name="add_birthdays">Add contact birthdays</string>
-    <string name="no_contacts_permission">Cannot obtain birthdays without the Contacts permission</string>
     <string name="no_birthdays">No birthdays have been found</string>
     <string name="birthdays_added">Birthdays added successfully</string>
+
+    <!-- Anniversaries -->
+    <string name="anniversaries">Anniversaries</string>
+    <string name="add_anniversaries">Add contact anniversaries</string>
+    <string name="no_anniversaries">No anniversaries have been found</string>
+    <string name="anniversaries_added">Anniversaries added successfully</string>
 
     <!-- Event Reminders -->
     <string name="reminder">Promemoria</string>

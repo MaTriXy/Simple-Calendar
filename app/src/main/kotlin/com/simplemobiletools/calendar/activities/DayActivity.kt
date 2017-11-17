@@ -16,6 +16,7 @@ import com.simplemobiletools.calendar.helpers.DAY_CODE
 import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.helpers.NEW_EVENT_START_TS
 import com.simplemobiletools.calendar.interfaces.NavigationListener
+import com.simplemobiletools.commons.extensions.isActivityDestroyed
 import com.simplemobiletools.commons.extensions.updateTextColors
 import kotlinx.android.synthetic.main.activity_day.*
 import org.joda.time.DateTime
@@ -43,14 +44,17 @@ class DayActivity : SimpleActivity(), NavigationListener, ViewPager.OnPageChange
         updateTextColors(day_coordinator)
 
         dbHelper.getEventTypes {
-            eventTypeColors.clear()
-            it.map { eventTypeColors.put(it.id, it.color) }
-            invalidateOptionsMenu()
+            if (!isActivityDestroyed()) {
+                eventTypeColors.clear()
+                it.map { eventTypeColors.put(it.id, it.color) }
+                invalidateOptionsMenu()
+            }
         }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_day, menu)
+        updateMenuTextSize(resources, menu)
         menu.findItem(R.id.filter).isVisible = eventTypeColors.size() > 1 || config.displayEventTypes.isEmpty()
         return true
     }
@@ -109,7 +113,7 @@ class DayActivity : SimpleActivity(), NavigationListener, ViewPager.OnPageChange
 
     override fun onPageSelected(position: Int) {
         mPagerPos = position
-        (view_pager.adapter as MyDayPagerAdapter).destroyMultiselector()
+        (view_pager.adapter as MyDayPagerAdapter).destroyMultiselector(position)
     }
 
     override fun goLeft() {

@@ -1,6 +1,40 @@
 Changelog
 ==========
 
+Version 2.11.0 *(2017-11-13)*
+----------------------------
+
+ * Adding a toggle for using English language on non-english devices
+ * Adding an Adaptive launcher icon
+ * Really fixing CalDAV sync
+ * Many other smaller improvements under the hood
+
+Version 2.10.1 *(2017-11-08)*
+----------------------------
+
+ * Fixed CalDAV syncing
+
+Version 2.10.0 *(2017-11-07)*
+----------------------------
+
+ * Allow adding contact anniversaries
+ * Couple monthly view improvements
+ * Remove the wrongly added Fingerprint permission
+
+Version 2.9.2 *(2017-10-30)*
+----------------------------
+
+ * Add PRODID and VERSION to the exported ICS file
+ * Handle parsing more formats of contact birthdays
+ * Increase the opacity of event titles at weekly and monthly view
+
+Version 2.9.1 *(2017-10-25)*
+----------------------------
+
+ * Fix a glitch at automatically reseting regular event type color
+ * Use contrast color at weekly view for event labels
+ * Properly handle birthdays without a year specified
+
 Version 2.9.0 *(2017-10-21)*
 ----------------------------
 

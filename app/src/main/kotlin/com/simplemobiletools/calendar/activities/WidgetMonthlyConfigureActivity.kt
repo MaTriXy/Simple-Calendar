@@ -6,9 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Color
-import android.graphics.PorterDuff
 import android.os.Bundle
-import android.support.v7.app.AppCompatActivity
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -23,13 +21,14 @@ import com.simplemobiletools.calendar.interfaces.MonthlyCalendar
 import com.simplemobiletools.calendar.models.DayMonthly
 import com.simplemobiletools.commons.dialogs.ColorPickerDialog
 import com.simplemobiletools.commons.extensions.adjustAlpha
+import com.simplemobiletools.commons.extensions.applyColorFilter
 import com.simplemobiletools.commons.extensions.beVisible
 import kotlinx.android.synthetic.main.first_row.*
 import kotlinx.android.synthetic.main.top_navigation.*
 import kotlinx.android.synthetic.main.widget_config_monthly.*
 import org.joda.time.DateTime
 
-class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
+class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
     lateinit var mRes: Resources
     private var mDays: List<DayMonthly>? = null
     private var mPackageName = ""
@@ -60,6 +59,12 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         config_save.setOnClickListener { saveConfig() }
         config_bg_color.setOnClickListener { pickBackgroundColor() }
         config_text_color.setOnClickListener { pickTextColor() }
+        config_bg_seekbar.setColors(mTextColor, mPrimaryColor, mPrimaryColor)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        window.decorView.setBackgroundColor(0)
     }
 
     private fun initVariables() {
@@ -67,7 +72,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         mRes = resources
 
         mTextColorWithoutTransparency = config.widgetTextColor
-        updateTextColors()
+        updateColors()
 
         mBgColor = config.widgetBgColor
         if (mBgColor == 1) {
@@ -113,7 +118,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
     private fun pickTextColor() {
         ColorPickerDialog(this, mTextColor) {
             mTextColorWithoutTransparency = it
-            updateTextColors()
+            updateColors()
             updateDays()
         }
     }
@@ -125,13 +130,13 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
         }
     }
 
-    private fun updateTextColors() {
+    private fun updateColors() {
         mTextColor = mTextColorWithoutTransparency
         mWeakTextColor = mTextColorWithoutTransparency.adjustAlpha(LOW_ALPHA)
         mPrimaryColor = config.primaryColor
 
-        top_left_arrow.drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
-        top_right_arrow.drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
+        top_left_arrow.applyColorFilter(mTextColor)
+        top_right_arrow.applyColorFilter(mTextColor)
         top_value.setTextColor(mTextColor)
         config_text_color.setBackgroundColor(mTextColor)
         config_save.setTextColor(mTextColor)
@@ -153,7 +158,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
             week_num.beVisible()
 
             for (i in 0..5) {
-                (findViewById(mRes.getIdentifier("week_num_$i", "id", mPackageName)) as TextView).apply {
+                findViewById<TextView>(mRes.getIdentifier("week_num_$i", "id", mPackageName)).apply {
                     text = "${mDays!![i * 7 + 3].weekOfYear}:"
                     setTextColor(mTextColor)
                     beVisible()
@@ -163,7 +168,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
 
         val dividerMargin = mRes.displayMetrics.density.toInt()
         for (i in 0 until len) {
-            (findViewById(mRes.getIdentifier("day_$i", "id", mPackageName)) as LinearLayout).apply {
+            findViewById<LinearLayout>(mRes.getIdentifier("day_$i", "id", mPackageName)).apply {
                 val day = mDays!![i]
                 removeAllViews()
 
@@ -198,7 +203,7 @@ class WidgetMonthlyConfigureActivity : AppCompatActivity(), MonthlyCalendar {
 
     private fun updateLabels() {
         for (i in 0..6) {
-            (findViewById(mRes.getIdentifier("label_$i", "id", mPackageName)) as TextView).apply {
+            findViewById<TextView>(mRes.getIdentifier("label_$i", "id", mPackageName)).apply {
                 setTextColor(mTextColor)
             }
         }

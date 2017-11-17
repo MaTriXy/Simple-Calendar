@@ -3,7 +3,6 @@ package com.simplemobiletools.calendar.activities
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.graphics.PorterDuff
 import android.os.Bundle
 import android.text.method.LinkMovementMethod
 import android.view.Menu
@@ -465,6 +464,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_event, menu)
+        updateMenuTextSize(resources, menu)
         if (wasActivityInitialized) {
             menu.findItem(R.id.delete).isVisible = mDialogTheme != 0 && mEvent.id != 0
             menu.findItem(R.id.share).isVisible = mDialogTheme != 0 && mEvent.id != 0
@@ -520,7 +520,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
             mEventTypeId
         } else {
-            dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)!!.id
+            dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)?.id ?: DBHelper.REGULAR_EVENT_TYPE_ID
         }
 
         val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
@@ -564,7 +564,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         if (mEvent.id == 0) {
             dbHelper.insert(mEvent, true) {
                 if (DateTime.now().isAfter(mEventStartDateTime.millis)) {
-                    toast(R.string.past_event_added)
+                    notifyEvent(mEvent)
                 } else {
                     toast(R.string.event_added)
                 }
@@ -731,11 +731,12 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     }
 
     private fun updateIconColors() {
-        event_time_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
-        event_repetition_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
-        event_reminder_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
-        event_type_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
-        event_caldav_calendar_image.setColorFilter(config.textColor, PorterDuff.Mode.SRC_IN)
+        val textColor = config.textColor
+        event_time_image.applyColorFilter(textColor)
+        event_repetition_image.applyColorFilter(textColor)
+        event_reminder_image.applyColorFilter(textColor)
+        event_type_image.applyColorFilter(textColor)
+        event_caldav_calendar_image.applyColorFilter(textColor)
     }
 
     override fun eventInserted(event: Event) {

@@ -53,6 +53,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
     private val PREFILLED_WEEKS = 61
 
     private var mIsMonthSelected = false
+    private var mStoredUseEnglish = false
     private var mStoredTextColor = 0
     private var mStoredBackgroundColor = 0
     private var mStoredPrimaryColor = 0
@@ -100,7 +101,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
         storeStateVariables()
         updateViewPager()
 
-        if (!hasPermission(PERMISSION_WRITE_CALENDAR)) {
+        if (!hasPermission(PERMISSION_WRITE_CALENDAR) || !hasPermission(PERMISSION_READ_CALENDAR)) {
             config.caldavSync = false
         }
 
@@ -117,6 +118,11 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     override fun onResume() {
         super.onResume()
+        if (mStoredUseEnglish != config.useEnglish) {
+            restartActivity()
+            return
+        }
+
         if (mStoredTextColor != config.textColor || mStoredBackgroundColor != config.backgroundColor || mStoredPrimaryColor != config.primaryColor
                 || mStoredDayCode != Formatter.getTodayCode()) {
             updateViewPager()
@@ -137,17 +143,12 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }
 
         updateWidgets()
-        if (config.storedView != EVENTS_LIST_VIEW)
-            updateTextColors(calendar_coordinator)
+        updateTextColors(calendar_coordinator)
     }
 
     override fun onPause() {
         super.onPause()
-        mStoredTextColor = config.textColor
-        mStoredIsSundayFirst = config.isSundayFirst
-        mStoredBackgroundColor = config.backgroundColor
-        mStoredPrimaryColor = config.primaryColor
-        mStoredUse24HourFormat = config.use24hourFormat
+        storeStateVariables()
     }
 
     override fun onStop() {
@@ -158,9 +159,12 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-        menu.findItem(R.id.filter).isVisible = mShouldFilterBeVisible
-        menu.findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible()
-        menu.findItem(R.id.refresh_caldav_calendars).isVisible = config.caldavSync
+        updateMenuTextSize(resources, menu)
+        menu.apply {
+            findItem(R.id.filter).isVisible = mShouldFilterBeVisible
+            findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible()
+            findItem(R.id.refresh_caldav_calendars).isVisible = config.caldavSync
+        }
         return true
     }
 
@@ -172,6 +176,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
             R.id.refresh_caldav_calendars -> refreshCalDAVCalendars()
             R.id.add_holidays -> addHolidays()
             R.id.add_birthdays -> tryAddBirthdays()
+            R.id.add_anniversaries -> tryAddAnniversaries()
             R.id.import_events -> tryImportEvents()
             R.id.export_events -> tryExportEvents()
             R.id.settings -> launchSettings()
@@ -190,9 +195,14 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun storeStateVariables() {
-        mStoredTextColor = config.textColor
-        mStoredPrimaryColor = config.primaryColor
-        mStoredBackgroundColor = config.backgroundColor
+        config.apply {
+            mStoredUseEnglish = useEnglish
+            mStoredIsSundayFirst = isSundayFirst
+            mStoredTextColor = textColor
+            mStoredPrimaryColor = primaryColor
+            mStoredBackgroundColor = backgroundColor
+            mStoredUse24HourFormat = use24hourFormat
+        }
         mStoredDayCode = Formatter.getTodayCode()
     }
 
@@ -307,7 +317,33 @@ class MainActivity : SimpleActivity(), NavigationListener {
         handlePermission(PERMISSION_READ_CONTACTS) {
             if (it) {
                 Thread({
-                    addBirthdays()
+                    addContactEvents(true) {
+                        if (it > 0) {
+                            toast(R.string.birthdays_added)
+                            updateViewPager()
+                        } else {
+                            toast(R.string.no_birthdays)
+                        }
+                    }
+                }).start()
+            } else {
+                toast(R.string.no_contacts_permission)
+            }
+        }
+    }
+
+    private fun tryAddAnniversaries() {
+        handlePermission(PERMISSION_READ_CONTACTS) {
+            if (it) {
+                Thread({
+                    addContactEvents(false) {
+                        if (it > 0) {
+                            toast(R.string.anniversaries_added)
+                            updateViewPager()
+                        } else {
+                            toast(R.string.no_anniversaries)
+                        }
+                    }
                 }).start()
             } else {
                 toast(R.string.no_contacts_permission)
@@ -323,16 +359,8 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }, Toast.LENGTH_LONG)
     }
 
-    private fun addBirthdays() {
-        val birthdays = getString(R.string.birthdays)
-        var eventTypeId = dbHelper.getEventTypeIdWithTitle(birthdays)
-        if (eventTypeId == -1) {
-            val eventType = EventType(0, birthdays, resources.getColor(R.color.default_birthdays_color))
-            eventTypeId = dbHelper.insertEventType(eventType)
-        }
-
-        val birthdayImportIDs = dbHelper.getBirthdays().map { it.importId }
-        var birthdaysAdded = 0
+    private fun addContactEvents(birthdays: Boolean, callback: (Int) -> Unit) {
+        var eventsAdded = 0
         val uri = ContactsContract.Data.CONTENT_URI
         val projection = arrayOf(ContactsContract.Contacts.DISPLAY_NAME,
                 ContactsContract.CommonDataKinds.Event.CONTACT_ID,
@@ -340,24 +368,42 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 ContactsContract.CommonDataKinds.Event.START_DATE)
 
         val selection = "${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Event.TYPE} = ?"
-        val selectionArgs = arrayOf(ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE, ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY.toString())
+        val type = if (birthdays) ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY else ContactsContract.CommonDataKinds.Event.TYPE_ANNIVERSARY
+        val selectionArgs = arrayOf(ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE, type.toString())
         var cursor: Cursor? = null
         try {
             cursor = contentResolver.query(uri, projection, selection, selectionArgs, null)
             if (cursor?.moveToFirst() == true) {
+                val dateFormats = getDateFormats()
+                val existingEvents = if (birthdays) dbHelper.getBirthdays() else dbHelper.getAnniversaries()
+                val importIDs = existingEvents.map { it.importId }
+                val eventTypeId = if (birthdays) getBirthdaysEventTypeId() else getAnniversariesEventTypeId()
+
                 do {
                     val contactId = cursor.getIntValue(ContactsContract.CommonDataKinds.Event.CONTACT_ID).toString()
                     val name = cursor.getStringValue(ContactsContract.Contacts.DISPLAY_NAME)
-                    val birthDay = cursor.getStringValue(ContactsContract.CommonDataKinds.Event.START_DATE)
-                    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    val timestamp = (formatter.parse(birthDay).time / 1000).toInt()
-                    val lastUpdated = cursor.getLongValue(ContactsContract.CommonDataKinds.Event.CONTACT_LAST_UPDATED_TIMESTAMP)
-                    val event = Event(0, timestamp, timestamp, name, importId = contactId, flags = FLAG_ALL_DAY, repeatInterval = YEAR,
-                            eventType = eventTypeId, source = SOURCE_CONTACT_BIRTHDAY, lastUpdated = lastUpdated)
+                    val startDate = cursor.getStringValue(ContactsContract.CommonDataKinds.Event.START_DATE)
 
-                    if (!birthdayImportIDs.contains(contactId)) {
-                        dbHelper.insert(event, false) {
-                            birthdaysAdded++
+                    for (format in dateFormats) {
+                        try {
+                            val formatter = SimpleDateFormat(format, Locale.getDefault())
+                            val date = formatter.parse(startDate)
+                            if (date.year < 70)
+                                date.year = 70
+
+                            val timestamp = (date.time / 1000).toInt()
+                            val source = if (birthdays) SOURCE_CONTACT_BIRTHDAY else SOURCE_CONTACT_ANNIVERSARY
+                            val lastUpdated = cursor.getLongValue(ContactsContract.CommonDataKinds.Event.CONTACT_LAST_UPDATED_TIMESTAMP)
+                            val event = Event(0, timestamp, timestamp, name, importId = contactId, flags = FLAG_ALL_DAY, repeatInterval = YEAR,
+                                    eventType = eventTypeId, source = source, lastUpdated = lastUpdated)
+
+                            if (!importIDs.contains(contactId)) {
+                                dbHelper.insert(event, false) {
+                                    eventsAdded++
+                                }
+                            }
+                            break
+                        } catch (e: Exception) {
                         }
                     }
                 } while (cursor.moveToNext())
@@ -369,14 +415,44 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }
 
         runOnUiThread {
-            if (birthdaysAdded > 0) {
-                toast(R.string.birthdays_added)
-                updateViewPager()
-            } else {
-                toast(R.string.no_birthdays)
-            }
+            callback(eventsAdded)
         }
     }
+
+    private fun getBirthdaysEventTypeId(): Int {
+        val birthdays = getString(R.string.birthdays)
+        var eventTypeId = dbHelper.getEventTypeIdWithTitle(birthdays)
+        if (eventTypeId == -1) {
+            val eventType = EventType(0, birthdays, resources.getColor(R.color.default_birthdays_color))
+            eventTypeId = dbHelper.insertEventType(eventType)
+        }
+        return eventTypeId
+    }
+
+    private fun getAnniversariesEventTypeId(): Int {
+        val anniversaries = getString(R.string.anniversaries)
+        var eventTypeId = dbHelper.getEventTypeIdWithTitle(anniversaries)
+        if (eventTypeId == -1) {
+            val eventType = EventType(0, anniversaries, resources.getColor(R.color.default_anniversaries_color))
+            eventTypeId = dbHelper.insertEventType(eventType)
+        }
+        return eventTypeId
+    }
+
+    private fun getDateFormats() = arrayListOf(
+            "yyyy-MM-dd",
+            "yyyyMMdd",
+            "yyyy.MM.dd",
+            "yy-MM-dd",
+            "yyMMdd",
+            "yy.MM.dd",
+            "yy/MM/dd",
+            "MM-dd",
+            "--MM-dd",
+            "MMdd",
+            "MM/dd",
+            "MM.dd"
+    )
 
     private fun updateView(view: Int) {
         calendar_fab.beGoneIf(view == YEARLY_VIEW)
@@ -404,7 +480,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun refreshViewPager() {
         when {
-            config.storedView == YEARLY_VIEW -> (main_view_pager.adapter as? MyYearPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
+            config.storedView == YEARLY_VIEW && !mIsMonthSelected -> (main_view_pager.adapter as? MyYearPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
             config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
             config.storedView == WEEKLY_VIEW -> (week_view_view_pager.adapter as? MyWeekPagerAdapter)?.refreshEvents(week_view_view_pager.currentItem)
             else -> (main_view_pager.adapter as? MyMonthPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
@@ -490,7 +566,8 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun launchAbout() {
-        startAboutActivity(R.string.app_name, LICENSE_KOTLIN or LICENSE_JODA or LICENSE_STETHO, BuildConfig.VERSION_NAME)
+        startAboutActivity(R.string.app_name, LICENSE_KOTLIN or LICENSE_JODA or LICENSE_STETHO or LICENSE_MULTISELECT or LICENSE_GSON or
+                LICENSE_LEAK_CANARY, BuildConfig.VERSION_NAME)
     }
 
     private fun resetTitle() {

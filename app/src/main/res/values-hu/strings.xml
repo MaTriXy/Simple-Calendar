@@ -11,7 +11,6 @@
     <string name="add_some_events">You can add some with the Plus button at the bottom.</string>
     <string name="details">Részletek</string>
     <string name="go_to_today">Go to today</string>
-    <string name="no_app_for_ics">No app capable of handling .ics files has been found</string>
     <string name="snooze">Snooze</string>
 
     <!-- Widget titles -->
@@ -25,7 +24,6 @@
     <string name="title_empty">A cím nem lehet üres</string>
     <string name="end_before_start">Az eseménynek nem lehet vége a kezdete előtt</string>
     <string name="event_added">Bejegyzés hozzáadva</string>
-    <string name="past_event_added">Korábbi bejegyzés hozzáadva</string>
     <string name="event_updated">Bejegyzés frissítve</string>
     <string name="filter">Filter</string>
     <string name="filter_events_by_type">Filter events by type</string>
@@ -101,9 +99,14 @@
     <!-- Birthdays -->
     <string name="birthdays">Birthdays</string>
     <string name="add_birthdays">Add contact birthdays</string>
-    <string name="no_contacts_permission">Cannot obtain birthdays without the Contacts permission</string>
     <string name="no_birthdays">No birthdays have been found</string>
     <string name="birthdays_added">Birthdays added successfully</string>
+
+    <!-- Anniversaries -->
+    <string name="anniversaries">Anniversaries</string>
+    <string name="add_anniversaries">Add contact anniversaries</string>
+    <string name="no_anniversaries">No anniversaries have been found</string>
+    <string name="anniversaries_added">Anniversaries added successfully</string>
 
     <!-- Event Reminders -->
     <string name="reminder">Emlékeztető</string>

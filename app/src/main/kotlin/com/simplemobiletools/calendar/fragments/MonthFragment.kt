@@ -3,7 +3,6 @@ package com.simplemobiletools.calendar.fragments
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
-import android.graphics.PorterDuff
 import android.os.Bundle
 import android.support.v4.app.Fragment
 import android.support.v7.app.AlertDialog
@@ -24,6 +23,7 @@ import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.interfaces.MonthlyCalendar
 import com.simplemobiletools.calendar.interfaces.NavigationListener
 import com.simplemobiletools.calendar.models.DayMonthly
+import com.simplemobiletools.commons.extensions.applyColorFilter
 import com.simplemobiletools.commons.extensions.beGone
 import com.simplemobiletools.commons.extensions.beVisibleIf
 import com.simplemobiletools.commons.extensions.setupDialogStuff
@@ -48,20 +48,20 @@ class MonthFragment : Fragment(), MonthlyCalendar {
     lateinit var mConfig: Config
     lateinit var mCalendar: MonthlyCalendarImpl
 
-    override fun onCreateView(inflater: LayoutInflater?, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        val view = inflater!!.inflate(R.layout.fragment_month, container, false)
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        val view = inflater.inflate(R.layout.fragment_month, container, false)
         mRes = resources
-        mPackageName = activity.packageName
+        mPackageName = activity!!.packageName
 
         mHolder = view.calendar_holder
-        mDayCode = arguments.getString(DAY_CODE)
-        mConfig = context.config
+        mDayCode = arguments!!.getString(DAY_CODE)
+        mConfig = context!!.config
         mSundayFirst = mConfig.isSundayFirst
 
         setupButtons()
 
         setupLabels()
-        mCalendar = MonthlyCalendarImpl(this, context)
+        mCalendar = MonthlyCalendarImpl(this, context!!)
 
         return view
     }
@@ -106,7 +106,7 @@ class MonthFragment : Fragment(), MonthlyCalendar {
         mPrimaryColor = mConfig.primaryColor
 
         mHolder.top_left_arrow.apply {
-            drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
+            applyColorFilter(mTextColor)
             background = null
             setOnClickListener {
                 listener?.goLeft()
@@ -114,7 +114,7 @@ class MonthFragment : Fragment(), MonthlyCalendar {
         }
 
         mHolder.top_right_arrow.apply {
-            drawable.mutate().setColorFilter(mTextColor, PorterDuff.Mode.SRC_ATOP)
+            applyColorFilter(mTextColor)
             background = null
             setOnClickListener {
                 listener?.goRight()
@@ -125,15 +125,15 @@ class MonthFragment : Fragment(), MonthlyCalendar {
     }
 
     private fun showMonthDialog() {
-        activity.setTheme(context.getAppropriateTheme())
-        val view = getLayoutInflater(arguments).inflate(R.layout.date_picker, null)
-        val datePicker = view.findViewById(R.id.date_picker) as DatePicker
-        datePicker.findViewById(Resources.getSystem().getIdentifier("day", "id", "android")).beGone()
+        activity!!.setTheme(context!!.getAppropriateTheme())
+        val view = layoutInflater.inflate(R.layout.date_picker, null)
+        val datePicker = view.findViewById<DatePicker>(R.id.date_picker)
+        datePicker.findViewById<View>(Resources.getSystem().getIdentifier("day", "id", "android")).beGone()
 
         val dateTime = DateTime(mCalendar.mTargetDate.toString())
         datePicker.init(dateTime.year, dateTime.monthOfYear - 1, 1, null)
 
-        AlertDialog.Builder(context)
+        AlertDialog.Builder(context!!)
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton(R.string.ok) { dialog, which -> positivePressed(dateTime, datePicker) }
                 .create().apply {
@@ -156,7 +156,7 @@ class MonthFragment : Fragment(), MonthlyCalendar {
             if (!mSundayFirst)
                 index = (index + 1) % letters.size
 
-            (mHolder.findViewById(mRes.getIdentifier("label_$i", "id", mPackageName)) as TextView).apply {
+            mHolder.findViewById<TextView>(mRes.getIdentifier("label_$i", "id", mPackageName)).apply {
                 setTextColor(mTextColor)
                 text = getString(letters[index])
             }
@@ -174,7 +174,7 @@ class MonthFragment : Fragment(), MonthlyCalendar {
         week_num.beVisibleIf(displayWeekNumbers)
 
         for (i in 0..5) {
-            (mHolder.findViewById(mRes.getIdentifier("week_num_$i", "id", mPackageName)) as TextView).apply {
+            mHolder.findViewById<TextView>(mRes.getIdentifier("week_num_$i", "id", mPackageName)).apply {
                 text = "${days[i * 7 + 3].weekOfYear}:"     // fourth day of the week matters
                 setTextColor(mTextColor)
                 beVisibleIf(displayWeekNumbers)
@@ -183,7 +183,7 @@ class MonthFragment : Fragment(), MonthlyCalendar {
 
         val dividerMargin = mRes.displayMetrics.density.toInt()
         for (i in 0 until len) {
-            (mHolder.findViewById(mRes.getIdentifier("day_$i", "id", mPackageName)) as LinearLayout).apply {
+            mHolder.findViewById<LinearLayout>(mRes.getIdentifier("day_$i", "id", mPackageName)).apply {
                 val day = days[i]
                 setOnClickListener { openDay(day.code) }
 
