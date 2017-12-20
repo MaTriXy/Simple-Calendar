@@ -25,7 +25,6 @@
     <string name="end_before_start">Etkinlik, başlamasından önce sona eremez</string>
     <string name="event_added">Etkinlik başarıyla eklendi</string>
     <string name="event_updated">Etkinlik başarıyla güncellendi</string>
-    <string name="filter">Filtre</string>
     <string name="filter_events_by_type">Etkinlikleri türe göre filtreleyin</string>
 
     <!-- Event Repetition -->
@@ -118,6 +117,7 @@
     <string name="hours_raw">saatler</string>
     <string name="days_raw">günler</string>
     <string name="add_another_reminder">Başka bir hatırlatma ekle</string>
+    <string name="event_reminders">Event reminders</string>
 
     <plurals name="minutes_before">
         <item quantity="one">%d dakika önce</item>

@@ -75,7 +75,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        storeStoragePaths()
+        appLaunched()
         calendar_fab.setOnClickListener { launchNewEventIntent() }
         checkWhatsNewDialog()
 
@@ -159,7 +159,6 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
-        updateMenuTextSize(resources, menu)
         menu.apply {
             findItem(R.id.filter).isVisible = mShouldFilterBeVisible
             findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible()
@@ -293,30 +292,30 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun addHolidays() {
         val items = getHolidayRadioItems()
-        RadioGroupDialog(this, items, -1) {
+        RadioGroupDialog(this, items) {
             toast(R.string.importing)
-            Thread({
+            Thread {
                 val holidays = getString(R.string.holidays)
                 var eventTypeId = dbHelper.getEventTypeIdWithTitle(holidays)
                 if (eventTypeId == -1) {
                     val eventType = EventType(0, holidays, resources.getColor(R.color.default_holidays_color))
                     eventTypeId = dbHelper.insertEventType(eventType)
                 }
-                val result = IcsImporter().importEvents(this, it as String, eventTypeId)
+                val result = IcsImporter(this).importEvents(it as String, eventTypeId)
                 handleParseResult(result)
                 if (result != IcsImporter.ImportResult.IMPORT_FAIL) {
                     runOnUiThread {
                         updateViewPager()
                     }
                 }
-            }).start()
+            }.start()
         }
     }
 
     private fun tryAddBirthdays() {
         handlePermission(PERMISSION_READ_CONTACTS) {
             if (it) {
-                Thread({
+                Thread {
                     addContactEvents(true) {
                         if (it > 0) {
                             toast(R.string.birthdays_added)
@@ -325,7 +324,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
                             toast(R.string.no_birthdays)
                         }
                     }
-                }).start()
+                }.start()
             } else {
                 toast(R.string.no_contacts_permission)
             }
@@ -335,7 +334,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
     private fun tryAddAnniversaries() {
         handlePermission(PERMISSION_READ_CONTACTS) {
             if (it) {
-                Thread({
+                Thread {
                     addContactEvents(false) {
                         if (it > 0) {
                             toast(R.string.anniversaries_added)
@@ -344,7 +343,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
                             toast(R.string.no_anniversaries)
                         }
                     }
-                }).start()
+                }.start()
             } else {
                 toast(R.string.no_contacts_permission)
             }
@@ -539,10 +538,10 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun exportEvents() {
-        FilePickerDialog(this, pickFile = false) {
+        FilePickerDialog(this, pickFile = false, showFAB = true) {
             val path = it
             ExportEventsDialog(this, path) { exportPastEvents, file, eventTypes ->
-                Thread({
+                Thread {
                     val events = dbHelper.getEventsToExport(exportPastEvents).filter { eventTypes.contains(it.eventType.toString()) }
                     if (events.isEmpty()) {
                         toast(R.string.no_events_for_exporting)
@@ -556,7 +555,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
                             })
                         }
                     }
-                }).start()
+                }.start()
             }
         }
     }
@@ -571,7 +570,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun resetTitle() {
-        title = getString(R.string.app_launcher_name)
+        supportActionBar?.title = getString(R.string.app_launcher_name)
         supportActionBar?.subtitle = ""
     }
 
@@ -596,7 +595,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
                     invalidateOptionsMenu()
                     if (config.storedView == YEARLY_VIEW) {
                         val dateTime = Formatter.getDateTimeFromCode(codes[position])
-                        title = "${getString(R.string.app_launcher_name)} - ${Formatter.getYear(dateTime)}"
+                        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${Formatter.getYear(dateTime)}"
                     }
                 }
             })
@@ -634,7 +633,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
         week_view_hours_holder.removeAllViews()
         val hourDateTime = DateTime().withDate(2000, 1, 1).withTime(0, 0, 0, 0)
         for (i in 1..23) {
-            val formattedHours = Formatter.getHours(this, hourDateTime.withHourOfDay(i))
+            val formattedHours = Formatter.getHours(applicationContext, hourDateTime.withHourOfDay(i))
             (layoutInflater.inflate(R.layout.weekly_view_hour_textview, null, false) as TextView).apply {
                 text = formattedHours
                 setTextColor(mStoredTextColor)
@@ -666,7 +665,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 weeklyAdapter.updateScrollY(week_view_view_pager.currentItem, y)
             }
         })
-        week_view_hours_scrollview.setOnTouchListener({ view, motionEvent -> true })
+        week_view_hours_scrollview.setOnTouchListener { view, motionEvent -> true }
     }
 
     fun updateHoursTopMargin(margin: Int) {
@@ -685,15 +684,15 @@ class MainActivity : SimpleActivity(), NavigationListener {
     private fun setupWeeklyActionbarTitle(timestamp: Int) {
         val startDateTime = Formatter.getDateTimeFromTS(timestamp)
         val endDateTime = Formatter.getDateTimeFromTS(timestamp + WEEK_SECONDS)
-        val startMonthName = Formatter.getMonthName(this, startDateTime.monthOfYear)
+        val startMonthName = Formatter.getMonthName(applicationContext, startDateTime.monthOfYear)
         if (startDateTime.monthOfYear == endDateTime.monthOfYear) {
             var newTitle = startMonthName
             if (startDateTime.year != DateTime().year)
                 newTitle += " - ${startDateTime.year}"
-            title = newTitle
+            supportActionBar?.title = newTitle
         } else {
-            val endMonthName = Formatter.getMonthName(this, endDateTime.monthOfYear)
-            title = "$startMonthName - $endMonthName"
+            val endMonthName = Formatter.getMonthName(applicationContext, endDateTime.monthOfYear)
+            supportActionBar?.title = "$startMonthName - $endMonthName"
         }
         supportActionBar?.subtitle = "${getString(R.string.week)} ${startDateTime.plusDays(3).weekOfWeekyear}"
     }
@@ -717,14 +716,15 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
                 override fun onPageSelected(position: Int) {
                     invalidateOptionsMenu()
-                    if (position < years.size)
-                        title = "${getString(R.string.app_launcher_name)} - ${years[position]}"
+                    if (position < years.size) {
+                        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${years[position]}"
+                    }
                 }
             })
             currentItem = mDefaultYearlyPage
             beVisible()
         }
-        title = "${getString(R.string.app_launcher_name)} - ${years[years.size / 2]}"
+        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${years[years.size / 2]}"
         calendar_event_list_holder.beGone()
     }
 

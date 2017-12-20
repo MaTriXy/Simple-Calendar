@@ -21,23 +21,18 @@ import com.simplemobiletools.commons.views.MyRecyclerView
 import kotlinx.android.synthetic.main.event_list_item.view.*
 import java.util.*
 
-class EventListAdapter(activity: SimpleActivity, val listItems: List<ListItem>, val allowLongClick: Boolean, val listener: DeleteEventsListener?,
+class EventListAdapter(activity: SimpleActivity, val listItems: ArrayList<ListItem>, val allowLongClick: Boolean, val listener: DeleteEventsListener?,
                        recyclerView: MyRecyclerView, itemClick: (Any) -> Unit) : MyRecyclerViewAdapter(activity, recyclerView, itemClick) {
 
-    private val config = activity.config
     private val ITEM_EVENT = 0
     private val ITEM_HEADER = 1
 
     private val topDivider = resources.getDrawable(R.drawable.divider_width)
     private val allDayString = resources.getString(R.string.all_day)
-    private val replaceDescriptionWithLocation = config.replaceDescription
+    private val replaceDescriptionWithLocation = activity.config.replaceDescription
     private val redTextColor = resources.getColor(R.color.red_text)
     private val now = (System.currentTimeMillis() / 1000).toInt()
     private val todayDate = Formatter.getDayTitle(activity, Formatter.getDayCodeFromTS(now))
-
-    init {
-        selectableItemCount = listItems.filter { it is ListEvent }.size
-    }
 
     override fun getActionMenuId() = R.menu.cab_event_list
 
@@ -56,6 +51,8 @@ class EventListAdapter(activity: SimpleActivity, val listItems: List<ListItem>, 
         }
     }
 
+    override fun getSelectableItemCount() = listItems.filter { it is ListEvent }.size
+
     override fun onCreateViewHolder(parent: ViewGroup?, viewType: Int): MyRecyclerViewAdapter.ViewHolder {
         val layoutId = if (viewType == ITEM_EVENT) R.layout.event_list_item else R.layout.event_list_section
         return createViewHolder(layoutId, parent)
@@ -63,11 +60,11 @@ class EventListAdapter(activity: SimpleActivity, val listItems: List<ListItem>, 
 
     override fun onBindViewHolder(holder: MyRecyclerViewAdapter.ViewHolder, position: Int) {
         val listItem = listItems[position]
-        val view = holder.bindView(listItem, allowLongClick) {
+        val view = holder.bindView(listItem, allowLongClick) { itemView, layoutPosition ->
             if (listItem is ListSection) {
-                setupListSection(it, listItem, position)
+                setupListSection(itemView, listItem, position)
             } else if (listItem is ListEvent) {
-                setupListEvent(it, listItem)
+                setupListEvent(itemView, listItem)
             }
         }
         bindViewHolder(holder, position, view)
@@ -151,6 +148,13 @@ class EventListAdapter(activity: SimpleActivity, val listItems: List<ListItem>, 
         }
 
         DeleteEventDialog(activity, eventIds) {
+            val listItemsToDelete = ArrayList<ListItem>(selectedPositions.size)
+            selectedPositions.sortedDescending().forEach {
+                val listItem = listItems[it]
+                listItemsToDelete.add(listItem)
+            }
+            listItems.removeAll(listItemsToDelete)
+
             if (it) {
                 listener?.deleteItems(eventIds)
             } else {

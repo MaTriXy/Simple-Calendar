@@ -70,10 +70,7 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
         val REGULAR_EVENT_TYPE_ID = 1
         var dbInstance: DBHelper? = null
 
-        private var mEventsListener: EventUpdateListener? = null
-
-        fun newInstance(context: Context, callback: EventUpdateListener? = null): DBHelper {
-            mEventsListener = callback
+        fun newInstance(context: Context): DBHelper {
             if (dbInstance == null)
                 dbInstance = DBHelper(context)
 
@@ -427,7 +424,6 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
         mDb.delete(EXCEPTIONS_TABLE_NAME, exceptionSelection, null)
 
         context.updateWidgets()
-        mEventsListener?.eventsDeleted(ids.size)
 
         ids.forEach {
             context.cancelNotification(it.toInt())
@@ -573,9 +569,9 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
     }
 
     fun getEvents(fromTS: Int, toTS: Int, eventId: Int = -1, callback: (events: MutableList<Event>) -> Unit) {
-        Thread({
+        Thread {
             getEventsInBackground(fromTS, toTS, eventId, callback)
-        }).start()
+        }.start()
     }
 
     fun getEventsInBackground(fromTS: Int, toTS: Int, eventId: Int = -1, callback: (events: MutableList<Event>) -> Unit) {
@@ -847,9 +843,9 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
     }
 
     fun getEventTypes(callback: (types: ArrayList<EventType>) -> Unit) {
-        Thread({
+        Thread {
             callback(fetchEventTypes())
-        }).start()
+        }.start()
     }
 
     fun fetchEventTypes(): ArrayList<EventType> {
@@ -960,13 +956,5 @@ class DBHelper private constructor(val context: Context) : SQLiteOpenHelper(cont
         } finally {
             cursor?.close()
         }
-    }
-
-    interface EventUpdateListener {
-        fun eventInserted(event: Event)
-
-        fun eventsDeleted(cnt: Int)
-
-        fun gotEvents(events: MutableList<Event>)
     }
 }

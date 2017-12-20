@@ -4,6 +4,7 @@ import com.simplemobiletools.calendar.R
 
 val LOW_ALPHA = .3f
 val MEDIUM_ALPHA = .6f
+val STORED_LOCALLY_ONLY = 0
 
 val DAY_CODE = "day_code"
 val YEAR_LABEL = "year"
@@ -64,9 +65,10 @@ val SUNDAY = 64
 val EVERY_DAY = 127
 
 // repeat_rule for monthly repetition
-val REPEAT_MONTH_SAME_DAY = 1
-val REPEAT_MONTH_EVERY_XTH_DAY = 2
-val REPEAT_MONTH_LAST_DAY = 3
+val REPEAT_MONTH_SAME_DAY = 1                   // ie 25th every month
+val REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST = 2     // ie every xth sunday. 4th if a month has 4 sundays, 5th if 5
+val REPEAT_MONTH_LAST_DAY = 3                   // ie every last day of the month
+val REPEAT_MONTH_ORDER_WEEKDAY = 4              // ie every 4th sunday, even if a month has 4 sundays only (will stay 4th even at months with 5)
 
 // special event flags
 val FLAG_ALL_DAY = 1
@@ -96,6 +98,9 @@ val EXDATE = "EXDATE"
 val BYDAY = "BYDAY"
 val BYMONTHDAY = "BYMONTHDAY"
 val LOCATION = "LOCATION:"
+
+// this tag isn't a standard ICS tag, but there's no official way of adding a category color in an ics file
+val CATEGORY_COLOR = "CATEGORY_COLOR:"
 
 val DISPLAY = "DISPLAY"
 val FREQ = "FREQ"

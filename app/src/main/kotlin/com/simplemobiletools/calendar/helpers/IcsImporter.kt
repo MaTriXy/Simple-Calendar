@@ -8,10 +8,11 @@ import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.helpers.IcsImporter.ImportResult.*
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.EventType
+import com.simplemobiletools.commons.extensions.areDigitsOnly
 import com.simplemobiletools.commons.extensions.showErrorToast
 import java.io.File
 
-class IcsImporter {
+class IcsImporter(val activity: SimpleActivity) {
     enum class ImportResult {
         IMPORT_FAIL, IMPORT_OK, IMPORT_PARTIAL
     }
@@ -30,6 +31,7 @@ class IcsImporter {
     private var curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
     private var curLastModified = 0L
     private var curLocation = ""
+    private var curCategoryColor = -2
     private var isNotificationDescription = false
     private var isProperReminderAction = false
     private var curReminderTriggerMinutes = -1
@@ -37,7 +39,7 @@ class IcsImporter {
     private var eventsImported = 0
     private var eventsFailed = 0
 
-    fun importEvents(activity: SimpleActivity, path: String, defaultEventType: Int): ImportResult {
+    fun importEvents(path: String, defaultEventType: Int): ImportResult {
         try {
             val existingEvents = activity.dbHelper.getEventsWithImportIds()
             var prevLine = ""
@@ -86,13 +88,22 @@ class IcsImporter {
                         isProperReminderAction = line.substring(ACTION.length) == DISPLAY
                     } else if (line.startsWith(TRIGGER)) {
                         curReminderTriggerMinutes = Parser().parseDurationSeconds(line.substring(TRIGGER.length)) / 60
+                    } else if (line.startsWith(CATEGORY_COLOR)) {
+                        val color = line.substring(CATEGORY_COLOR.length)
+                        if (color.trimStart('-').areDigitsOnly()) {
+                            curCategoryColor = Integer.parseInt(color)
+                        }
                     } else if (line.startsWith(CATEGORIES)) {
                         val categories = line.substring(CATEGORIES.length)
                         tryAddCategories(categories, activity)
                     } else if (line.startsWith(LAST_MODIFIED)) {
                         curLastModified = getTimestamp(line.substring(LAST_MODIFIED.length)) * 1000L
                     } else if (line.startsWith(EXDATE)) {
-                        curRepeatExceptions.add(getTimestamp(line.substring(EXDATE.length)))
+                        var value = line.substring(EXDATE.length)
+                        if (value.endsWith('}'))
+                            value = value.substring(0, value.length - 1)
+
+                        curRepeatExceptions.add(getTimestamp(value))
                     } else if (line.startsWith(LOCATION)) {
                         curLocation = line.substring(LOCATION.length)
                     } else if (line == END_ALARM) {
@@ -106,7 +117,7 @@ class IcsImporter {
                         if (curTitle.isEmpty() || curStart == -1)
                             continue
 
-                        val eventToUpdate = existingEvents.firstOrNull { curImportId == it.importId }
+                        val eventToUpdate = existingEvents.firstOrNull { curImportId.isNotEmpty() && curImportId == it.importId }
                         if (eventToUpdate != null && eventToUpdate.lastUpdated >= curLastModified) {
                             continue
                         }
@@ -161,6 +172,7 @@ class IcsImporter {
                 Parser().parseDateTimeValue(fullString.substring(1))
             }
         } catch (e: Exception) {
+            activity.showErrorToast(e, Toast.LENGTH_LONG)
             eventsFailed++
             -1
         }
@@ -175,7 +187,8 @@ class IcsImporter {
 
         val eventId = context.dbHelper.getEventTypeIdWithTitle(eventTypeTitle)
         curEventType = if (eventId == -1) {
-            val eventType = EventType(0, eventTypeTitle, context.resources.getColor(R.color.color_primary))
+            val newTypeColor = if (curCategoryColor == -2) context.resources.getColor(R.color.color_primary) else curCategoryColor
+            val eventType = EventType(0, eventTypeTitle, newTypeColor)
             context.dbHelper.insertEventType(eventType)
         } else {
             eventId
@@ -204,6 +217,7 @@ class IcsImporter {
         curRepeatRule = 0
         curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
         curLastModified = 0L
+        curCategoryColor = -2
         curLocation = ""
         isNotificationDescription = false
         isProperReminderAction = false

@@ -25,7 +25,6 @@
     <string name="end_before_start">Händelsen kan inte sluta innan den har startat</string>
     <string name="event_added">Händelsen tillagd</string>
     <string name="event_updated">Händelsen uppdaterad</string>
-    <string name="filter">Filtrera</string>
     <string name="filter_events_by_type">Filtrera händelser efter typ</string>
 
     <!-- Event Repetition -->
@@ -118,6 +117,7 @@
     <string name="hours_raw">timmar</string>
     <string name="days_raw">dagar</string>
     <string name="add_another_reminder">Lägg till en annan påminnelse</string>
+    <string name="event_reminders">Event reminders</string>
 
     <plurals name="minutes_before">
         <item quantity="one">%d minut före</item>

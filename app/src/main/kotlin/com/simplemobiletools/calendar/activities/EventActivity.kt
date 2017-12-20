@@ -22,11 +22,7 @@ import kotlinx.android.synthetic.main.activity_event.*
 import org.joda.time.DateTime
 import java.util.*
 
-class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
-    companion object {
-        val STORED_LOCALLY_ONLY = 0
-    }
-
+class EventActivity : SimpleActivity() {
     private var mReminder1Minutes = 0
     private var mReminder2Minutes = 0
     private var mReminder3Minutes = 0
@@ -112,7 +108,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         val realStart = if (mEventOccurrenceTS == 0) mEvent.startTS else mEventOccurrenceTS
         val duration = mEvent.endTS - mEvent.startTS
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
-        title = resources.getString(R.string.edit_event)
+        supportActionBar?.title = resources.getString(R.string.edit_event)
         mEventStartDateTime = Formatter.getDateTimeFromTS(realStart)
         mEventEndDateTime = Formatter.getDateTimeFromTS(realStart + duration)
         event_title.setText(mEvent.title)
@@ -133,7 +129,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     private fun setupNewEvent(dateTime: DateTime) {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
-        title = resources.getString(R.string.new_event)
+        supportActionBar?.title = resources.getString(R.string.new_event)
         mEventStartDateTime = dateTime
 
         val addHours = if (intent.getBooleanExtra(NEW_EVENT_SET_HOUR_DURATION, false)) 1 else 0
@@ -227,9 +223,20 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
                 setRepeatRule(it)
             }
         } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            val items = arrayListOf(
-                    RadioItem(REPEAT_MONTH_SAME_DAY, getString(R.string.repeat_on_the_same_day)),
-                    RadioItem(REPEAT_MONTH_EVERY_XTH_DAY, getRepeatXthDayString(true)))
+            val items = arrayListOf(RadioItem(REPEAT_MONTH_SAME_DAY, getString(R.string.repeat_on_the_same_day)))
+
+            // split Every Last Sunday and Every Fourth Sunday of the month, if the month has 4 sundays
+            if (isLastWeekDayOfMonth()) {
+                val order = (mEventStartDateTime.dayOfMonth - 1) / 7 + 1
+                if (order == 4) {
+                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY)))
+                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST)))
+                } else if (order == 5) {
+                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST)))
+                }
+            } else {
+                items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY)))
+            }
 
             if (isLastDayOfTheMonth()) {
                 items.add(RadioItem(REPEAT_MONTH_LAST_DAY, getString(R.string.repeat_on_the_last_day)))
@@ -243,10 +250,12 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     private fun isLastDayOfTheMonth() = mEventStartDateTime.dayOfMonth == mEventStartDateTime.dayOfMonth().withMaximumValue().dayOfMonth
 
-    private fun getRepeatXthDayString(includeBase: Boolean): String {
+    private fun isLastWeekDayOfMonth() = mEventStartDateTime.monthOfYear != mEventStartDateTime.plusDays(7).monthOfYear
+
+    private fun getRepeatXthDayString(includeBase: Boolean, repeatRule: Int): String {
         val dayOfWeek = mEventStartDateTime.dayOfWeek
         val base = getBaseString(dayOfWeek)
-        val order = getOrderString()
+        val order = getOrderString(repeatRule)
         val dayString = getDayString(dayOfWeek)
         return if (includeBase) {
             "$base $order $dayString"
@@ -266,10 +275,10 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     private fun isMaleGender(day: Int) = day == 1 || day == 2 || day == 4 || day == 5
 
-    private fun getOrderString(): String {
+    private fun getOrderString(repeatRule: Int): String {
         val dayOfMonth = mEventStartDateTime.dayOfMonth
         var order = (dayOfMonth - 1) / 7 + 1
-        if (mEventStartDateTime.monthOfYear != mEventStartDateTime.plusDays(7).monthOfYear) {
+        if (order == 4 && isLastWeekDayOfMonth() && repeatRule == REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST) {
             order = -1
         }
 
@@ -307,7 +316,10 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         if (mRepeatInterval.isXWeeklyRepetition()) {
             event_repetition_rule.text = if (mRepeatRule == EVERY_DAY) getString(R.string.every_day) else getSelectedDaysString()
         } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            event_repetition_rule_label.text = getString(if (mRepeatRule == REPEAT_MONTH_EVERY_XTH_DAY) R.string.repeat else R.string.repeat_on)
+            val repeatString = if (mRepeatRule == REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST || mRepeatRule == REPEAT_MONTH_ORDER_WEEKDAY)
+                R.string.repeat else R.string.repeat_on
+
+            event_repetition_rule_label.text = getString(repeatString)
             event_repetition_rule.text = getMonthlyRepetitionRuleText()
         }
     }
@@ -335,7 +347,7 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
     private fun getMonthlyRepetitionRuleText() = when (mRepeatRule) {
         REPEAT_MONTH_SAME_DAY -> getString(R.string.the_same_day)
         REPEAT_MONTH_LAST_DAY -> getString(R.string.the_last_day)
-        else -> getRepeatXthDayString(false)
+        else -> getRepeatXthDayString(false, mRepeatRule)
     }
 
     private fun showEventTypeDialog() {
@@ -464,10 +476,9 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_event, menu)
-        updateMenuTextSize(resources, menu)
         if (wasActivityInitialized) {
-            menu.findItem(R.id.delete).isVisible = mDialogTheme != 0 && mEvent.id != 0
-            menu.findItem(R.id.share).isVisible = mDialogTheme != 0 && mEvent.id != 0
+            menu.findItem(R.id.delete).isVisible = mEvent.id != 0
+            menu.findItem(R.id.share).isVisible = mEvent.id != 0
         }
         return true
     }
@@ -564,7 +575,9 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         if (mEvent.id == 0) {
             dbHelper.insert(mEvent, true) {
                 if (DateTime.now().isAfter(mEventStartDateTime.millis)) {
-                    notifyEvent(mEvent)
+                    if (mEvent.getReminders().isNotEmpty()) {
+                        notifyEvent(mEvent)
+                    }
                 } else {
                     toast(R.string.event_added)
                 }
@@ -737,14 +750,5 @@ class EventActivity : SimpleActivity(), DBHelper.EventUpdateListener {
         event_reminder_image.applyColorFilter(textColor)
         event_type_image.applyColorFilter(textColor)
         event_caldav_calendar_image.applyColorFilter(textColor)
-    }
-
-    override fun eventInserted(event: Event) {
-    }
-
-    override fun eventsDeleted(cnt: Int) {
-    }
-
-    override fun gotEvents(events: MutableList<Event>) {
     }
 }

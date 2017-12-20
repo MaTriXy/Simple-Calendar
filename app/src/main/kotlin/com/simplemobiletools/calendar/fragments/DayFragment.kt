@@ -5,7 +5,6 @@ import android.content.res.Resources
 import android.os.Bundle
 import android.support.v4.app.Fragment
 import android.support.v7.app.AlertDialog
-import android.support.v7.widget.DividerItemDecoration
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,7 +19,9 @@ import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.extensions.dbHelper
 import com.simplemobiletools.calendar.extensions.getAppropriateTheme
 import com.simplemobiletools.calendar.extensions.getFilteredEvents
-import com.simplemobiletools.calendar.helpers.*
+import com.simplemobiletools.calendar.helpers.DAY_CODE
+import com.simplemobiletools.calendar.helpers.EVENT_ID
+import com.simplemobiletools.calendar.helpers.EVENT_OCCURRENCE_TS
 import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.interfaces.DeleteEventsListener
 import com.simplemobiletools.calendar.interfaces.NavigationListener
@@ -32,7 +33,7 @@ import kotlinx.android.synthetic.main.top_navigation.view.*
 import org.joda.time.DateTime
 import java.util.*
 
-class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListener {
+class DayFragment : Fragment(), DeleteEventsListener {
     var mListener: NavigationListener? = null
     private var mTextColor = 0
     private var mDayCode = ""
@@ -96,7 +97,7 @@ class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListen
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton(R.string.ok) { dialog, which -> positivePressed(dateTime, datePicker) }
                 .create().apply {
-            context.setupDialogStuff(view, this)
+            activity?.setupDialogStuff(view, this)
         }
     }
 
@@ -111,7 +112,7 @@ class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListen
     fun checkEvents() {
         val startTS = Formatter.getDayStartTS(mDayCode)
         val endTS = Formatter.getDayEndTS(mDayCode)
-        DBHelper.newInstance(context!!, this).getEvents(startTS, endTS) {
+        context!!.dbHelper.getEvents(startTS, endTS) {
             receivedEvents(it)
         }
     }
@@ -134,19 +135,16 @@ class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListen
         }
     }
 
-    private fun updateEvents(events: List<Event>) {
+    private fun updateEvents(events: ArrayList<Event>) {
         if (activity == null)
             return
 
-        val eventsAdapter = DayEventsAdapter(activity as SimpleActivity, events, this, mHolder.day_events) {
+        DayEventsAdapter(activity as SimpleActivity, events, this, mHolder.day_events) {
             editEvent(it as Event)
-        }
-        eventsAdapter.setupDragListener(true)
-
-        mHolder.day_events.adapter = eventsAdapter
-        DividerItemDecoration(context, DividerItemDecoration.VERTICAL).apply {
-            setDrawable(context!!.resources.getDrawable(R.drawable.divider))
-            mHolder.day_events.addItemDecoration(this)
+        }.apply {
+            setupDragListener(true)
+            addVerticalDividers(true)
+            mHolder.day_events.adapter = this
         }
     }
 
@@ -160,7 +158,7 @@ class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListen
 
     override fun deleteItems(ids: ArrayList<Int>) {
         val eventIDs = Array(ids.size, { i -> (ids[i].toString()) })
-        DBHelper.newInstance(context!!, this).deleteEvents(eventIDs, true)
+        context!!.dbHelper.deleteEvents(eventIDs, true)
     }
 
     override fun addEventRepeatException(parentIds: ArrayList<Int>, timestamps: ArrayList<Int>) {
@@ -168,16 +166,5 @@ class DayFragment : Fragment(), DBHelper.EventUpdateListener, DeleteEventsListen
             context!!.dbHelper.addEventRepeatException(parentIds[index], timestamps[index])
         }
         (activity as DayActivity).recheckEvents()
-    }
-
-    override fun eventInserted(event: Event) {
-    }
-
-    override fun eventsDeleted(cnt: Int) {
-        (activity as DayActivity).recheckEvents()
-    }
-
-    override fun gotEvents(events: MutableList<Event>) {
-        receivedEvents(events)
     }
 }

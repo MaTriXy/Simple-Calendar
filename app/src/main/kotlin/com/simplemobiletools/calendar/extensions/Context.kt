@@ -1,10 +1,7 @@
 package com.simplemobiletools.calendar.extensions
 
-import android.annotation.TargetApi
-import android.app.AlarmManager
-import android.app.Notification
-import android.app.NotificationManager
-import android.app.PendingIntent
+import android.annotation.SuppressLint
+import android.app.*
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -12,7 +9,6 @@ import android.content.Intent
 import android.content.res.Resources
 import android.graphics.Color
 import android.net.Uri
-import android.os.Build
 import android.support.v4.app.NotificationCompat
 import android.view.Gravity
 import android.view.View
@@ -34,8 +30,12 @@ import org.joda.time.DateTimeZone
 import java.text.SimpleDateFormat
 import java.util.*
 
+val Context.config: Config get() = Config.newInstance(applicationContext)
+
+val Context.dbHelper: DBHelper get() = DBHelper.newInstance(applicationContext)
+
 fun Context.updateWidgets() {
-    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(this, MyWidgetMonthlyProvider::class.java))
+    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(applicationContext, MyWidgetMonthlyProvider::class.java))
     if (widgetsCnt.isNotEmpty()) {
         val ids = intArrayOf(R.xml.widget_monthly_info)
         Intent(applicationContext, MyWidgetMonthlyProvider::class.java).apply {
@@ -49,7 +49,7 @@ fun Context.updateWidgets() {
 }
 
 fun Context.updateListWidget() {
-    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(this, MyWidgetListProvider::class.java))
+    val widgetsCnt = AppWidgetManager.getInstance(applicationContext).getAppWidgetIds(ComponentName(applicationContext, MyWidgetListProvider::class.java))
     if (widgetsCnt.isNotEmpty()) {
         val ids = intArrayOf(R.xml.widget_list_info)
         Intent(applicationContext, MyWidgetListProvider::class.java).apply {
@@ -73,7 +73,6 @@ fun Context.scheduleNextEventReminder(event: Event, dbHelper: DBHelper) {
 
     val now = (System.currentTimeMillis() / 1000).toInt()
     val reminderSeconds = event.getReminders().reversed().map { it * 60 }
-
     dbHelper.getEvents(now, now + YEAR, event.id) {
         if (it.isNotEmpty()) {
             for (curEvent in it) {
@@ -175,8 +174,21 @@ fun Context.notifyEvent(event: Event) {
     notificationManager.notify(event.id, notification)
 }
 
-@TargetApi(Build.VERSION_CODES.LOLLIPOP)
+@SuppressLint("NewApi")
 private fun getNotification(context: Context, pendingIntent: PendingIntent, event: Event, content: String): Notification {
+    val channelId = "reminder_channel"
+    if (context.isOreoPlus()) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val name = context.resources.getString(R.string.event_reminders)
+        val importance = NotificationManager.IMPORTANCE_HIGH
+        NotificationChannel(channelId, name, importance).apply {
+            enableLights(true)
+            lightColor = event.color
+            enableVibration(false)
+            notificationManager.createNotificationChannel(this)
+        }
+    }
+
     val soundUri = Uri.parse(context.config.reminderSound)
     val builder = NotificationCompat.Builder(context)
             .setContentTitle(event.title)
@@ -187,6 +199,7 @@ private fun getNotification(context: Context, pendingIntent: PendingIntent, even
             .setDefaults(Notification.DEFAULT_LIGHTS)
             .setAutoCancel(true)
             .setSound(soundUri)
+            .setChannelId(channelId)
             .addAction(R.drawable.ic_snooze, context.getString(R.string.snooze), getSnoozePendingIntent(context, event))
 
     if (context.isLollipopPlus())
@@ -226,7 +239,9 @@ fun Context.launchNewEventIntent() {
 fun Context.getNewEventTimestampFromCode(dayCode: String): Int {
     val currHour = DateTime(System.currentTimeMillis(), DateTimeZone.getDefault()).hourOfDay
     val dateTime = Formatter.getLocalDateTimeFromCode(dayCode).withHourOfDay(currHour)
-    return dateTime.plusHours(1).withMinuteOfHour(0).withSecondOfMinute(0).withMillisOfSecond(0).seconds()
+    val newDateTime = dateTime.plusHours(1).withMinuteOfHour(0).withSecondOfMinute(0).withMillisOfSecond(0)
+    // make sure the date doesn't change
+    return newDateTime.withDate(dateTime.year, dateTime.monthOfYear, dateTime.dayOfMonth).seconds()
 }
 
 fun Context.getCurrentOffset() = SimpleDateFormat("Z", Locale.getDefault()).format(Date())
@@ -235,10 +250,10 @@ fun Context.getSyncedCalDAVCalendars() = CalDAVHandler(applicationContext).getCa
 
 fun Context.recheckCalDAVCalendars(callback: () -> Unit) {
     if (config.caldavSync) {
-        Thread({
+        Thread {
             CalDAVHandler(applicationContext).refreshCalendars(null, callback)
             updateWidgets()
-        }).start()
+        }.start()
     }
 }
 
@@ -254,10 +269,6 @@ fun Context.scheduleCalDAVSync(activate: Boolean) {
         alarm.cancel(pendingIntent)
     }
 }
-
-val Context.config: Config get() = Config.newInstance(applicationContext)
-
-val Context.dbHelper: DBHelper get() = DBHelper.newInstance(applicationContext)
 
 fun Context.addDayNumber(rawTextColor: Int, day: DayMonthly, linearLayout: LinearLayout, dayLabelHeight: Int, callback: (Int) -> Unit) {
     var textColor = rawTextColor

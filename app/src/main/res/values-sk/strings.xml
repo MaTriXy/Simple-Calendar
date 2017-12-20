@@ -25,7 +25,6 @@
     <string name="end_before_start">Udalosť nemôže skončiť skôr ako by začala</string>
     <string name="event_added">Udalosť bola úspešne pridaná</string>
     <string name="event_updated">Udalosť bola úspešne upravená</string>
-    <string name="filter">Filtrovať</string>
     <string name="filter_events_by_type">Filtrovať udalosti podľa typu</string>
 
     <!-- Event Repetition -->
@@ -122,6 +121,7 @@
     <string name="hours_raw">hodiny</string>
     <string name="days_raw">dni</string>
     <string name="add_another_reminder">Pridať ďalšiu pripomienku</string>
+    <string name="event_reminders">Pripomienky udalostí</string>
 
     <plurals name="minutes_before">
         <item quantity="one">%d minútu vopred</item>

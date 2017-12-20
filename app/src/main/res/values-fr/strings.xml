@@ -25,7 +25,6 @@
     <string name="end_before_start">L\'événement ne peut pas se terminer plus tôt qu\'il ne commence</string>
     <string name="event_added">Événement ajouté avec succès</string>
     <string name="event_updated">Événement ajouté avec succès</string>
-    <string name="filter">Filtrer</string>
     <string name="filter_events_by_type">Filtrer les événements par type</string>
 
     <!-- Event Repetition -->
@@ -118,6 +117,7 @@
     <string name="hours_raw">heures</string>
     <string name="days_raw">jours</string>
     <string name="add_another_reminder">Ajouter un autre rappel</string>
+    <string name="event_reminders">Event reminders</string>
 
     <plurals name="minutes_before">
         <item quantity="one">%d minute avant</item>
@@ -169,7 +169,7 @@
     <string name="edit_type">Éditer le type</string>
     <string name="type_already_exists">Un type avec ce titre existe déjà</string>
     <string name="color">Couleur</string>
-    <string name="regular_event">Événement ordinnaire</string>
+    <string name="regular_event">Événement ordinaire</string>
     <string name="cannot_delete_default_type">Le type d\'événement par défaut ne peut pas être supprimé</string>
     <string name="select_event_type">Sélectionner un type d\'événement</string>
     <string name="move_events_into_default">Déplacer les événements affectés dans le type d\'événement par défaut</string>

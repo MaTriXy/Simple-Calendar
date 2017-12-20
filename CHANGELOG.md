@@ -1,6 +1,26 @@
 Changelog
 ==========
 
+Version 3.0.1 *(2017-12-06)*
+----------------------------
+
+ * Fixed missing launcher icons on some devices
+ * Properly name the Holidays event type on non-english devices
+
+Version 3.0.0 *(2017-12-04)*
+----------------------------
+
+ * Improved primary color customization
+ * Fixed notifications on Android 8
+ * Fixed a couple issues with importing events
+ * Properly export/import custom event type colors
+
+Version 2.12.0 *(2017-11-26)*
+----------------------------
+
+ * Allow setting repetition on every for example 4th sunday, even if a month has only 4
+ * Some rewrites to the list views
+
 Version 2.11.0 *(2017-11-13)*
 ----------------------------
 

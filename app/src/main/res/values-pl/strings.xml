@@ -25,7 +25,6 @@
     <string name="end_before_start">Wydarzenie nie może zakończyć się wcześniej, niż się zaczyna</string>
     <string name="event_added">Wydarzenie zostało dodane</string>
     <string name="event_updated">Wydarzenie zostało zaktualizowane</string>
-    <string name="filter">Filtr</string>
     <string name="filter_events_by_type">Filtruj wydarzenia według typu</string>
 
     <!-- Event Repetition -->
@@ -121,6 +120,7 @@
     <string name="hours_raw">godziny</string>
     <string name="days_raw">dni</string>
     <string name="add_another_reminder">Dodaj inne przypomnienie</string>
+    <string name="event_reminders">Event reminders</string>
 
     <plurals name="minutes_before">
         <item quantity="one">%d minutę przed</item>
