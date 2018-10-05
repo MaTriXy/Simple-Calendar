@@ -35,7 +35,6 @@ class ManageEventTypesActivity : SimpleActivity(), DeleteEventTypesListener {
                 val adapter = ManageEventTypesAdapter(this, it, this, manage_event_types_list) {
                     showEventTypeDialog(it as EventType)
                 }
-                adapter.setupDragListener(true)
                 manage_event_types_list.adapter = adapter
             }
         }
@@ -54,15 +53,21 @@ class ManageEventTypesActivity : SimpleActivity(), DeleteEventTypesListener {
         return true
     }
 
-    override fun deleteEventTypes(eventTypes: ArrayList<EventType>, deleteEvents: Boolean) {
+    override fun deleteEventTypes(eventTypes: ArrayList<EventType>, deleteEvents: Boolean): Boolean {
         if (eventTypes.any { it.caldavCalendarId != 0 }) {
             toast(R.string.unsync_caldav_calendar)
-        }
-
-        dbHelper.deleteEventTypes(eventTypes, deleteEvents) {
-            if (it == 0) {
-                toast(R.string.unknown_error_occurred)
+            if (eventTypes.size == 1) {
+                return false
             }
         }
+
+        Thread {
+            dbHelper.deleteEventTypes(eventTypes, deleteEvents) {
+                if (it == 0) {
+                    toast(R.string.unknown_error_occurred)
+                }
+            }
+        }.start()
+        return true
     }
 }

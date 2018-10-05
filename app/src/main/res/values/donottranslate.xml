@@ -2,6 +2,15 @@
 <resources>
 
     <!-- Release notes -->
+    <string name="release_129">Allow setting default event reminders, not always reuse the last events\' ones</string>
+    <string name="release_119">
+        Allow changing the app launcher icon color\n
+        Added support for more advanced yearly repetition rules\n
+        Allow setting reminder looping till dismissed\n
+        Added a button in Settings for changing widget colors without recreating them\n
+        Added optional dimming of past events
+    </string>
+    <string name="release_117">Reworked custom notification sound picking, should be more reliable</string>
     <string name="release_98">
         Added a Location field\n
         Allow adding Contact birthdays
@@ -45,19 +54,4 @@
     <string name="release_42">Allow changing the reminder notification sound</string>
     <string name="release_40">Added a new view, a list of upcoming events</string>
     <string name="release_39">Added the option to vibrate at notifications</string>
-
-    <string-array name="months">
-        <item>@string/january</item>
-        <item>@string/february</item>
-        <item>@string/march</item>
-        <item>@string/april</item>
-        <item>@string/may</item>
-        <item>@string/june</item>
-        <item>@string/july</item>
-        <item>@string/august</item>
-        <item>@string/september</item>
-        <item>@string/october</item>
-        <item>@string/november</item>
-        <item>@string/december</item>
-    </string-array>
 </resources>

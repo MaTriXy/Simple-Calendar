@@ -1,42 +1,40 @@
 package com.simplemobiletools.calendar.activities
 
-import android.content.ContentResolver
+import android.app.SearchManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.database.ContentObserver
 import android.database.Cursor
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
-import android.provider.CalendarContract
 import android.provider.ContactsContract
-import android.support.v4.view.ViewPager
-import android.util.SparseIntArray
+import android.support.v4.view.MenuItemCompat
+import android.support.v7.widget.SearchView
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.TextView
 import android.widget.Toast
 import com.simplemobiletools.calendar.BuildConfig
 import com.simplemobiletools.calendar.R
-import com.simplemobiletools.calendar.adapters.MyMonthPagerAdapter
-import com.simplemobiletools.calendar.adapters.MyWeekPagerAdapter
-import com.simplemobiletools.calendar.adapters.MyYearPagerAdapter
+import com.simplemobiletools.calendar.adapters.EventListAdapter
 import com.simplemobiletools.calendar.dialogs.ExportEventsDialog
 import com.simplemobiletools.calendar.dialogs.FilterEventTypesDialog
 import com.simplemobiletools.calendar.dialogs.ImportEventsDialog
 import com.simplemobiletools.calendar.extensions.*
-import com.simplemobiletools.calendar.fragments.EventListFragment
-import com.simplemobiletools.calendar.fragments.WeekFragment
+import com.simplemobiletools.calendar.fragments.*
 import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.helpers.Formatter
-import com.simplemobiletools.calendar.interfaces.NavigationListener
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.EventType
-import com.simplemobiletools.calendar.views.MyScrollView
+import com.simplemobiletools.calendar.models.ListEvent
 import com.simplemobiletools.commons.dialogs.FilePickerDialog
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
 import com.simplemobiletools.commons.extensions.*
 import com.simplemobiletools.commons.helpers.*
+import com.simplemobiletools.commons.interfaces.RefreshRecyclerViewListener
+import com.simplemobiletools.commons.models.FAQItem
 import com.simplemobiletools.commons.models.RadioItem
 import com.simplemobiletools.commons.models.Release
 import kotlinx.android.synthetic.main.activity_main.*
@@ -46,104 +44,91 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 
-class MainActivity : SimpleActivity(), NavigationListener {
-    private val CALDAV_SYNC_DELAY = 2000L
-    private val PREFILLED_MONTHS = 97
-    private val PREFILLED_YEARS = 31
-    private val PREFILLED_WEEKS = 61
+class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
+    private val CALDAV_SYNC_DELAY = 1000L
 
-    private var mIsMonthSelected = false
-    private var mStoredUseEnglish = false
+    private var showCalDAVRefreshToast = false
+    private var mShouldFilterBeVisible = false
+    private var mIsSearchOpen = false
+    private var mLatestSearchQuery = ""
+    private var mCalDAVSyncHandler = Handler()
+    private var mSearchMenuItem: MenuItem? = null
+    private var shouldGoToTodayBeVisible = false
+    private var goToTodayButton: MenuItem? = null
+    private var currentFragments = ArrayList<MyFragmentHolder>()
+
     private var mStoredTextColor = 0
     private var mStoredBackgroundColor = 0
     private var mStoredPrimaryColor = 0
     private var mStoredDayCode = ""
     private var mStoredIsSundayFirst = false
     private var mStoredUse24HourFormat = false
-    private var mShouldFilterBeVisible = false
-    private var mCalDAVSyncHandler = Handler()
-
-    private var mDefaultWeeklyPage = 0
-    private var mDefaultMonthlyPage = 0
-    private var mDefaultYearlyPage = 0
-
-    companion object {
-        var mWeekScrollY = 0
-        var eventTypeColors = SparseIntArray()
-    }
+    private var mStoredDimPastEvents = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        appLaunched()
-        calendar_fab.setOnClickListener { launchNewEventIntent() }
+        appLaunched(BuildConfig.APPLICATION_ID)
+
+        // just get a reference to the database to make sure it is created properly
+        dbHelper
+
         checkWhatsNewDialog()
-
-        if (resources.getBoolean(R.bool.portrait_only))
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-
-        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
-            val uri = intent.data
-            if (uri.authority == "com.android.calendar") {
-                // clicking date on a third party widget: content://com.android.calendar/time/1507309245683
-                if (intent?.extras?.getBoolean("DETAIL_VIEW", false) == true) {
-                    val timestamp = uri.pathSegments.last()
-                    if (timestamp.areDigitsOnly()) {
-                        openDayAt(timestamp.toLong())
-                        return
-                    }
-                }
-            } else {
-                tryImportEventsFromFile(uri)
-            }
+        calendar_fab.beVisibleIf(config.storedView != YEARLY_VIEW)
+        calendar_fab.setOnClickListener {
+            launchNewEventIntent(currentFragments.last().getNewEventDayCode())
         }
 
         storeStateVariables()
-        updateViewPager()
+        if (resources.getBoolean(R.bool.portrait_only)) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
 
         if (!hasPermission(PERMISSION_WRITE_CALENDAR) || !hasPermission(PERMISSION_READ_CALENDAR)) {
             config.caldavSync = false
         }
 
-        recheckCalDAVCalendars {}
-
-        if (config.googleSync) {
-            val ids = dbHelper.getGoogleSyncEvents().map { it.id.toString() }.toTypedArray()
-            dbHelper.deleteEvents(ids, false)
-            config.googleSync = false
+        if (config.caldavSync) {
+            refreshCalDAVCalendars(false)
         }
 
-        checkOpenIntents()
+        if (!checkViewIntents()) {
+            return
+        }
+
+        if (!checkOpenIntents()) {
+            updateViewPager()
+        }
+
+        checkAppOnSDCard()
     }
 
     override fun onResume() {
         super.onResume()
-        if (mStoredUseEnglish != config.useEnglish) {
-            restartActivity()
-            return
-        }
-
         if (mStoredTextColor != config.textColor || mStoredBackgroundColor != config.backgroundColor || mStoredPrimaryColor != config.primaryColor
-                || mStoredDayCode != Formatter.getTodayCode()) {
+                || mStoredDayCode != Formatter.getTodayCode() || mStoredDimPastEvents != config.dimPastEvents) {
             updateViewPager()
         }
 
         dbHelper.getEventTypes {
-            eventTypeColors.clear()
-            it.map { eventTypeColors.put(it.id, it.color) }
-            mShouldFilterBeVisible = eventTypeColors.size() > 1 || config.displayEventTypes.isEmpty()
-            invalidateOptionsMenu()
+            mShouldFilterBeVisible = it.size > 1 || config.displayEventTypes.isEmpty()
         }
 
-        storeStateVariables()
         if (config.storedView == WEEKLY_VIEW) {
-            if (mStoredIsSundayFirst != config.isSundayFirst || mStoredUse24HourFormat != config.use24hourFormat) {
-                fillWeeklyViewPager()
+            if (mStoredIsSundayFirst != config.isSundayFirst || mStoredUse24HourFormat != config.use24HourFormat) {
+                updateViewPager()
             }
         }
 
+        storeStateVariables()
         updateWidgets()
-        updateTextColors(calendar_coordinator)
+        if (config.storedView != EVENTS_LIST_VIEW) {
+            updateTextColors(calendar_coordinator)
+        }
+        search_placeholder.setTextColor(config.textColor)
+        search_placeholder_2.setTextColor(config.textColor)
+        calendar_fab.setColors(config.textColor, getAdjustedPrimaryColor(), config.backgroundColor)
+        search_holder.background = ColorDrawable(config.backgroundColor)
     }
 
     override fun onPause() {
@@ -155,15 +140,26 @@ class MainActivity : SimpleActivity(), NavigationListener {
         super.onStop()
         mCalDAVSyncHandler.removeCallbacksAndMessages(null)
         contentResolver.unregisterContentObserver(calDAVSyncObserver)
+        closeSearch()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
         menu.apply {
+            goToTodayButton = findItem(R.id.go_to_today)
             findItem(R.id.filter).isVisible = mShouldFilterBeVisible
-            findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible()
+            findItem(R.id.go_to_today).isVisible = shouldGoToTodayBeVisible && config.storedView != EVENTS_LIST_VIEW
+        }
+
+        setupSearch(menu)
+        return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu?): Boolean {
+        menu!!.apply {
             findItem(R.id.refresh_caldav_calendars).isVisible = config.caldavSync
         }
+
         return true
     }
 
@@ -172,7 +168,7 @@ class MainActivity : SimpleActivity(), NavigationListener {
             R.id.change_view -> showViewDialog()
             R.id.go_to_today -> goToToday()
             R.id.filter -> showFilterDialog()
-            R.id.refresh_caldav_calendars -> refreshCalDAVCalendars()
+            R.id.refresh_caldav_calendars -> refreshCalDAVCalendars(true)
             R.id.add_holidays -> addHolidays()
             R.id.add_birthdays -> tryAddBirthdays()
             R.id.add_anniversaries -> tryAddAnniversaries()
@@ -180,39 +176,95 @@ class MainActivity : SimpleActivity(), NavigationListener {
             R.id.export_events -> tryExportEvents()
             R.id.settings -> launchSettings()
             R.id.about -> launchAbout()
+            android.R.id.home -> onBackPressed()
             else -> return super.onOptionsItemSelected(item)
         }
         return true
     }
 
     override fun onBackPressed() {
-        if (mIsMonthSelected && config.storedView == YEARLY_VIEW) {
-            updateView(YEARLY_VIEW)
+        if (currentFragments.size > 1) {
+            removeTopFragment()
         } else {
             super.onBackPressed()
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        checkOpenIntents()
+        checkViewIntents()
+    }
+
     private fun storeStateVariables() {
         config.apply {
-            mStoredUseEnglish = useEnglish
             mStoredIsSundayFirst = isSundayFirst
             mStoredTextColor = textColor
             mStoredPrimaryColor = primaryColor
             mStoredBackgroundColor = backgroundColor
-            mStoredUse24HourFormat = use24hourFormat
+            mStoredUse24HourFormat = use24HourFormat
+            mStoredDimPastEvents = dimPastEvents
         }
         mStoredDayCode = Formatter.getTodayCode()
     }
 
-    private fun checkOpenIntents() {
+    private fun setupSearch(menu: Menu) {
+        val searchManager = getSystemService(Context.SEARCH_SERVICE) as SearchManager
+        mSearchMenuItem = menu.findItem(R.id.search)
+        (mSearchMenuItem!!.actionView as SearchView).apply {
+            setSearchableInfo(searchManager.getSearchableInfo(componentName))
+            isSubmitButtonEnabled = false
+            setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+                override fun onQueryTextSubmit(query: String) = false
+
+                override fun onQueryTextChange(newText: String): Boolean {
+                    if (mIsSearchOpen) {
+                        searchQueryChanged(newText)
+                    }
+                    return true
+                }
+            })
+        }
+
+        MenuItemCompat.setOnActionExpandListener(mSearchMenuItem, object : MenuItemCompat.OnActionExpandListener {
+            override fun onMenuItemActionExpand(item: MenuItem?): Boolean {
+                mIsSearchOpen = true
+                search_holder.beVisible()
+                calendar_fab.beGone()
+                searchQueryChanged("")
+                return true
+            }
+
+            override fun onMenuItemActionCollapse(item: MenuItem?): Boolean {
+                mIsSearchOpen = false
+                search_holder.beGone()
+                calendar_fab.beVisible()
+                return true
+            }
+        })
+    }
+
+    private fun closeSearch() {
+        mSearchMenuItem?.collapseActionView()
+    }
+
+    private fun checkOpenIntents(): Boolean {
         val dayCodeToOpen = intent.getStringExtra(DAY_CODE) ?: ""
+        val openMonth = intent.getBooleanExtra(OPEN_MONTH, false)
+        intent.removeExtra(OPEN_MONTH)
+        intent.removeExtra(DAY_CODE)
         if (dayCodeToOpen.isNotEmpty()) {
-            openDayCode(dayCodeToOpen)
+            calendar_fab.beVisible()
+            config.storedView = if (openMonth) MONTHLY_VIEW else DAILY_VIEW
+            updateViewPager(dayCodeToOpen)
+            return true
         }
 
         val eventIdToOpen = intent.getIntExtra(EVENT_ID, 0)
         val eventOccurrenceToOpen = intent.getIntExtra(EVENT_OCCURRENCE_TS, 0)
+        intent.removeExtra(EVENT_ID)
+        intent.removeExtra(EVENT_OCCURRENCE_TS)
         if (eventIdToOpen != 0 && eventOccurrenceToOpen != 0) {
             Intent(this, EventActivity::class.java).apply {
                 putExtra(EVENT_ID, eventIdToOpen)
@@ -220,41 +272,66 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 startActivity(this)
             }
         }
+
+        return false
+    }
+
+    private fun checkViewIntents(): Boolean {
+        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
+            val uri = intent.data
+            if (uri.authority == "com.android.calendar") {
+                if (uri.path.startsWith("/events")) {
+                    // intents like content://com.android.calendar/events/1756
+                    val eventId = uri.lastPathSegment
+                    val id = dbHelper.getEventIdWithLastImportId(eventId)
+                    if (id != 0) {
+                        Intent(this, EventActivity::class.java).apply {
+                            putExtra(EVENT_ID, id)
+                            startActivity(this)
+                        }
+                    } else {
+                        toast(R.string.unknown_error_occurred)
+                    }
+                } else if (intent?.extras?.getBoolean("DETAIL_VIEW", false) == true) {
+                    // clicking date on a third party widget: content://com.android.calendar/time/1507309245683
+                    val timestamp = uri.pathSegments.last()
+                    if (timestamp.areDigitsOnly()) {
+                        openDayAt(timestamp.toLong())
+                        return false
+                    }
+                }
+            } else {
+                tryImportEventsFromFile(uri)
+            }
+        }
+        return true
     }
 
     private fun showViewDialog() {
-        val res = resources
         val items = arrayListOf(
-                RadioItem(WEEKLY_VIEW, res.getString(R.string.weekly_view)),
-                RadioItem(MONTHLY_VIEW, res.getString(R.string.monthly_view)),
-                RadioItem(YEARLY_VIEW, res.getString(R.string.yearly_view)),
-                RadioItem(EVENTS_LIST_VIEW, res.getString(R.string.simple_event_list)))
+                RadioItem(DAILY_VIEW, getString(R.string.daily_view)),
+                RadioItem(WEEKLY_VIEW, getString(R.string.weekly_view)),
+                RadioItem(MONTHLY_VIEW, getString(R.string.monthly_view)),
+                RadioItem(YEARLY_VIEW, getString(R.string.yearly_view)),
+                RadioItem(EVENTS_LIST_VIEW, getString(R.string.simple_event_list)))
 
         RadioGroupDialog(this, items, config.storedView) {
-            updateView(it as Int)
+            calendar_fab.beVisibleIf(it as Int != YEARLY_VIEW)
+            resetActionBarTitle()
+            closeSearch()
+            updateView(it)
+            shouldGoToTodayBeVisible = false
             invalidateOptionsMenu()
         }
     }
 
     private fun goToToday() {
-        if (config.storedView == WEEKLY_VIEW) {
-            week_view_view_pager.currentItem = mDefaultWeeklyPage
-        } else if (config.storedView == MONTHLY_VIEW) {
-            main_view_pager.currentItem = mDefaultMonthlyPage
-        } else if (config.storedView == YEARLY_VIEW) {
-            if (mIsMonthSelected) {
-                openMonthlyToday()
-            } else {
-                main_view_pager.currentItem = mDefaultYearlyPage
-            }
-        }
+        currentFragments.last().goToToday()
     }
 
-    private fun shouldGoToTodayBeVisible() = when {
-        config.storedView == WEEKLY_VIEW -> week_view_view_pager.currentItem != mDefaultWeeklyPage
-        config.storedView == MONTHLY_VIEW -> main_view_pager.currentItem != mDefaultMonthlyPage
-        config.storedView == YEARLY_VIEW -> main_view_pager.currentItem != mDefaultYearlyPage
-        else -> false
+    private fun resetActionBarTitle() {
+        updateActionBarTitle(getString(R.string.app_launcher_name))
+        updateActionBarSubtitle("")
     }
 
     private fun showFilterDialog() {
@@ -263,15 +340,20 @@ class MainActivity : SimpleActivity(), NavigationListener {
         }
     }
 
-    private fun refreshCalDAVCalendars() {
-        toast(R.string.refreshing)
-        val uri = CalendarContract.Calendars.CONTENT_URI
-        contentResolver.registerContentObserver(uri, false, calDAVSyncObserver)
-        Bundle().apply {
-            putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true)
-            putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true)
-            ContentResolver.requestSync(null, uri.authority, this)
+    fun toggleGoToTodayVisibility(beVisible: Boolean) {
+        shouldGoToTodayBeVisible = beVisible
+        if (goToTodayButton?.isVisible != beVisible) {
+            invalidateOptionsMenu()
         }
+    }
+
+    private fun refreshCalDAVCalendars(showRefreshToast: Boolean) {
+        showCalDAVRefreshToast = showRefreshToast
+        if (showRefreshToast) {
+            toast(R.string.refreshing)
+        }
+
+        syncCalDAVCalendars(this, calDAVSyncObserver)
         scheduleCalDAVSync(true)
     }
 
@@ -283,7 +365,9 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 mCalDAVSyncHandler.postDelayed({
                     recheckCalDAVCalendars {
                         refreshViewPager()
-                        toast(R.string.refreshing_complete)
+                        if (showCalDAVRefreshToast) {
+                            toast(R.string.refreshing_complete)
+                        }
                     }
                 }, CALDAV_SYNC_DELAY)
             }
@@ -301,7 +385,8 @@ class MainActivity : SimpleActivity(), NavigationListener {
                     val eventType = EventType(0, holidays, resources.getColor(R.color.default_holidays_color))
                     eventTypeId = dbHelper.insertEventType(eventType)
                 }
-                val result = IcsImporter(this).importEvents(it as String, eventTypeId)
+
+                val result = IcsImporter(this).importEvents(it as String, eventTypeId, 0, false)
                 handleParseResult(result)
                 if (result != IcsImporter.ImportResult.IMPORT_FAIL) {
                     runOnUiThread {
@@ -387,8 +472,9 @@ class MainActivity : SimpleActivity(), NavigationListener {
                         try {
                             val formatter = SimpleDateFormat(format, Locale.getDefault())
                             val date = formatter.parse(startDate)
-                            if (date.year < 70)
+                            if (date.year < 70) {
                                 date.year = 70
+                            }
 
                             val timestamp = (date.time / 1000).toInt()
                             val source = if (birthdays) SOURCE_CONTACT_BIRTHDAY else SOURCE_CONTACT_ANNIVERSARY
@@ -438,51 +524,97 @@ class MainActivity : SimpleActivity(), NavigationListener {
         return eventTypeId
     }
 
-    private fun getDateFormats() = arrayListOf(
-            "yyyy-MM-dd",
-            "yyyyMMdd",
-            "yyyy.MM.dd",
-            "yy-MM-dd",
-            "yyMMdd",
-            "yy.MM.dd",
-            "yy/MM/dd",
-            "MM-dd",
-            "--MM-dd",
-            "MMdd",
-            "MM/dd",
-            "MM.dd"
-    )
-
     private fun updateView(view: Int) {
-        calendar_fab.beGoneIf(view == YEARLY_VIEW)
-        mIsMonthSelected = view == MONTHLY_VIEW
+        calendar_fab.beVisibleIf(view != YEARLY_VIEW)
         config.storedView = view
         updateViewPager()
+        if (goToTodayButton?.isVisible == true) {
+            shouldGoToTodayBeVisible = false
+            invalidateOptionsMenu()
+        }
     }
 
-    private fun updateViewPager() {
-        resetTitle()
-        when {
-            config.storedView == YEARLY_VIEW -> fillYearlyViewPager()
-            config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
-            config.storedView == WEEKLY_VIEW -> fillWeeklyViewPager()
-            else -> openMonthlyToday()
+    private fun updateViewPager(dayCode: String? = Formatter.getTodayCode()) {
+        val fragment = getFragmentsHolder()
+        currentFragments.forEach {
+            supportFragmentManager.beginTransaction().remove(it).commitNow()
+        }
+        currentFragments.clear()
+        currentFragments.add(fragment)
+        val bundle = Bundle()
+
+        when (config.storedView) {
+            DAILY_VIEW, MONTHLY_VIEW -> bundle.putString(DAY_CODE, dayCode)
+            WEEKLY_VIEW -> bundle.putString(WEEK_START_DATE_TIME, getThisWeekDateTime())
         }
 
-        mWeekScrollY = 0
+        fragment.arguments = bundle
+        supportFragmentManager.beginTransaction().add(R.id.fragments_holder, fragment).commitNow()
     }
 
-    private fun openMonthlyToday() {
-        val targetDay = DateTime().toString(Formatter.DAYCODE_PATTERN)
-        fillMonthlyViewPager(targetDay)
+    fun openMonthFromYearly(dateTime: DateTime) {
+        if (currentFragments.last() is MonthFragmentsHolder) {
+            return
+        }
+
+        val fragment = MonthFragmentsHolder()
+        currentFragments.add(fragment)
+        val bundle = Bundle()
+        bundle.putString(DAY_CODE, Formatter.getDayCodeFromDateTime(dateTime))
+        fragment.arguments = bundle
+        supportFragmentManager.beginTransaction().add(R.id.fragments_holder, fragment).commitNow()
+        resetActionBarTitle()
+        calendar_fab.beVisible()
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+
+    fun openDayFromMonthly(dateTime: DateTime) {
+        if (currentFragments.last() is DayFragmentsHolder) {
+            return
+        }
+
+        val fragment = DayFragmentsHolder()
+        currentFragments.add(fragment)
+        val bundle = Bundle()
+        bundle.putString(DAY_CODE, Formatter.getDayCodeFromDateTime(dateTime))
+        fragment.arguments = bundle
+        supportFragmentManager.beginTransaction().add(R.id.fragments_holder, fragment).commitNow()
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    }
+
+    private fun getThisWeekDateTime(): String {
+        var thisweek = DateTime().withDayOfWeek(1).withTimeAtStartOfDay().minusDays(if (config.isSundayFirst) 1 else 0)
+        if (DateTime().minusDays(7).seconds() > thisweek.seconds()) {
+            thisweek = thisweek.plusDays(7)
+        }
+        return thisweek.toString()
+    }
+
+    private fun getFragmentsHolder() = when (config.storedView) {
+        DAILY_VIEW -> DayFragmentsHolder()
+        MONTHLY_VIEW -> MonthFragmentsHolder()
+        YEARLY_VIEW -> YearFragmentsHolder()
+        EVENTS_LIST_VIEW -> EventListFragment()
+        else -> WeekFragmentsHolder()
+    }
+
+    private fun removeTopFragment() {
+        supportFragmentManager.beginTransaction().remove(currentFragments.last()).commit()
+        currentFragments.removeAt(currentFragments.size - 1)
+        toggleGoToTodayVisibility(currentFragments.last().shouldGoToTodayBeVisible())
+        currentFragments.last().apply {
+            refreshEvents()
+            updateActionBarTitle()
+        }
+        calendar_fab.beGoneIf(currentFragments.size == 1 && config.storedView == YEARLY_VIEW)
+        supportActionBar?.setDisplayHomeAsUpEnabled(currentFragments.size > 1)
     }
 
     private fun refreshViewPager() {
-        when {
-            config.storedView == YEARLY_VIEW && !mIsMonthSelected -> (main_view_pager.adapter as? MyYearPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
-            config.storedView == EVENTS_LIST_VIEW -> fillEventsList()
-            config.storedView == WEEKLY_VIEW -> (week_view_view_pager.adapter as? MyWeekPagerAdapter)?.refreshEvents(week_view_view_pager.currentItem)
-            else -> (main_view_pager.adapter as? MyMonthPagerAdapter)?.refreshEvents(main_view_pager.currentItem)
+        runOnUiThread {
+            if (!isActivityDestroyed()) {
+                currentFragments.last().refreshEvents()
+            }
         }
     }
 
@@ -496,13 +628,13 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun importEvents() {
         FilePickerDialog(this) {
-            importEventsDialog(it)
+            showImportEventsDialog(it)
         }
     }
 
     private fun tryImportEventsFromFile(uri: Uri) {
         when {
-            uri.scheme == "file" -> importEventsDialog(uri.path)
+            uri.scheme == "file" -> showImportEventsDialog(uri.path)
             uri.scheme == "content" -> {
                 val tempFile = getTempFile()
                 if (tempFile == null) {
@@ -513,13 +645,13 @@ class MainActivity : SimpleActivity(), NavigationListener {
                 val inputStream = contentResolver.openInputStream(uri)
                 val out = FileOutputStream(tempFile)
                 inputStream.copyTo(out)
-                importEventsDialog(tempFile.absolutePath)
+                showImportEventsDialog(tempFile.absolutePath)
             }
             else -> toast(R.string.invalid_file_format)
         }
     }
 
-    private fun importEventsDialog(path: String) {
+    private fun showImportEventsDialog(path: String) {
         ImportEventsDialog(this, path) {
             if (it) {
                 runOnUiThread {
@@ -539,19 +671,17 @@ class MainActivity : SimpleActivity(), NavigationListener {
 
     private fun exportEvents() {
         FilePickerDialog(this, pickFile = false, showFAB = true) {
-            val path = it
-            ExportEventsDialog(this, path) { exportPastEvents, file, eventTypes ->
+            ExportEventsDialog(this, it) { exportPastEvents, file, eventTypes ->
                 Thread {
                     val events = dbHelper.getEventsToExport(exportPastEvents).filter { eventTypes.contains(it.eventType.toString()) }
                     if (events.isEmpty()) {
-                        toast(R.string.no_events_for_exporting)
+                        toast(R.string.no_entries_for_exporting)
                     } else {
-                        toast(R.string.exporting)
-                        IcsExporter().exportEvents(this, file, events as ArrayList<Event>) {
+                        IcsExporter().exportEvents(this, file, events as ArrayList<Event>, true) {
                             toast(when (it) {
-                                IcsExporter.ExportResult.EXPORT_OK -> R.string.events_exported_successfully
-                                IcsExporter.ExportResult.EXPORT_PARTIAL -> R.string.exporting_some_events_failed
-                                else -> R.string.exporting_events_failed
+                                IcsExporter.ExportResult.EXPORT_OK -> R.string.exporting_successful
+                                IcsExporter.ExportResult.EXPORT_PARTIAL -> R.string.exporting_some_entries_failed
+                                else -> R.string.exporting_failed
                             })
                         }
                     }
@@ -565,206 +695,59 @@ class MainActivity : SimpleActivity(), NavigationListener {
     }
 
     private fun launchAbout() {
-        startAboutActivity(R.string.app_name, LICENSE_KOTLIN or LICENSE_JODA or LICENSE_STETHO or LICENSE_MULTISELECT or LICENSE_GSON or
-                LICENSE_LEAK_CANARY, BuildConfig.VERSION_NAME)
+        val licenses = LICENSE_JODA or LICENSE_STETHO or LICENSE_MULTISELECT or LICENSE_LEAK_CANARY
+
+        val faqItems = arrayListOf(
+                FAQItem(R.string.faq_1_title_commons, R.string.faq_1_text_commons),
+                FAQItem(R.string.faq_2_title_commons, R.string.faq_2_text_commons),
+                FAQItem(R.string.faq_4_title_commons, R.string.faq_4_text_commons),
+                FAQItem(getString(R.string.faq_1_title), getString(R.string.faq_1_text)),
+                FAQItem(getString(R.string.faq_2_title), getString(R.string.faq_2_text)),
+                FAQItem(getString(R.string.faq_3_title), getString(R.string.faq_3_text)))
+
+        startAboutActivity(R.string.app_name, licenses, BuildConfig.VERSION_NAME, faqItems, true)
     }
 
-    private fun resetTitle() {
-        supportActionBar?.title = getString(R.string.app_launcher_name)
-        supportActionBar?.subtitle = ""
-    }
+    private fun searchQueryChanged(text: String) {
+        mLatestSearchQuery = text
+        search_placeholder_2.beGoneIf(text.length >= 2)
+        if (text.length >= 2) {
+            dbHelper.getEventsWithSearchQuery(text) { searchedText, events ->
+                if (searchedText == mLatestSearchQuery) {
+                    runOnUiThread {
+                        search_results_list.beVisibleIf(events.isNotEmpty())
+                        search_placeholder.beVisibleIf(events.isEmpty())
+                        val listItems = getEventListItems(events)
+                        val eventsAdapter = EventListAdapter(this, listItems, true, this, search_results_list) {
+                            if (it is ListEvent) {
+                                Intent(applicationContext, EventActivity::class.java).apply {
+                                    putExtra(EVENT_ID, it.id)
+                                    startActivity(this)
+                                }
+                            }
+                        }
 
-    private fun fillMonthlyViewPager(targetDay: String) {
-        main_weekly_scrollview.beGone()
-        calendar_fab.beVisible()
-        val codes = getMonths(targetDay)
-        val monthlyAdapter = MyMonthPagerAdapter(supportFragmentManager, codes, this)
-        mDefaultMonthlyPage = codes.size / 2
-
-        main_view_pager.apply {
-            adapter = monthlyAdapter
-            beVisible()
-            addOnPageChangeListener(object : ViewPager.OnPageChangeListener {
-                override fun onPageScrollStateChanged(state: Int) {
-                }
-
-                override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
-                }
-
-                override fun onPageSelected(position: Int) {
-                    invalidateOptionsMenu()
-                    if (config.storedView == YEARLY_VIEW) {
-                        val dateTime = Formatter.getDateTimeFromCode(codes[position])
-                        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${Formatter.getYear(dateTime)}"
+                        search_results_list.adapter = eventsAdapter
                     }
                 }
-            })
-            currentItem = mDefaultMonthlyPage
-        }
-        calendar_event_list_holder.beGone()
-    }
-
-    private fun getMonths(code: String): List<String> {
-        val months = ArrayList<String>(PREFILLED_MONTHS)
-        val today = Formatter.getDateTimeFromCode(code)
-        for (i in -PREFILLED_MONTHS / 2..PREFILLED_MONTHS / 2) {
-            months.add(Formatter.getDayCodeFromDateTime(today.plusMonths(i)))
-        }
-
-        return months
-    }
-
-    private fun fillWeeklyViewPager() {
-        var thisweek = DateTime().withDayOfWeek(1).withTimeAtStartOfDay().minusDays(if (config.isSundayFirst) 1 else 0)
-        if (DateTime().minusDays(7).seconds() > thisweek.seconds()) {
-            thisweek = thisweek.plusDays(7)
-        }
-        val weekTSs = getWeekTimestamps(thisweek.seconds())
-        val weeklyAdapter = MyWeekPagerAdapter(supportFragmentManager, weekTSs, object : WeekFragment.WeekScrollListener {
-            override fun scrollTo(y: Int) {
-                week_view_hours_scrollview.scrollY = y
-                mWeekScrollY = y
             }
-        })
-        main_view_pager.beGone()
-        calendar_event_list_holder.beGone()
-        main_weekly_scrollview.beVisible()
-
-        week_view_hours_holder.removeAllViews()
-        val hourDateTime = DateTime().withDate(2000, 1, 1).withTime(0, 0, 0, 0)
-        for (i in 1..23) {
-            val formattedHours = Formatter.getHours(applicationContext, hourDateTime.withHourOfDay(i))
-            (layoutInflater.inflate(R.layout.weekly_view_hour_textview, null, false) as TextView).apply {
-                text = formattedHours
-                setTextColor(mStoredTextColor)
-                week_view_hours_holder.addView(this)
-            }
-        }
-
-        mDefaultWeeklyPage = weekTSs.size / 2
-        week_view_view_pager.apply {
-            adapter = weeklyAdapter
-            addOnPageChangeListener(object : ViewPager.OnPageChangeListener {
-                override fun onPageScrollStateChanged(state: Int) {
-                }
-
-                override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
-                }
-
-                override fun onPageSelected(position: Int) {
-                    invalidateOptionsMenu()
-                    setupWeeklyActionbarTitle(weekTSs[position])
-                }
-            })
-            currentItem = mDefaultWeeklyPage
-        }
-
-        week_view_hours_scrollview.setOnScrollviewListener(object : MyScrollView.ScrollViewListener {
-            override fun onScrollChanged(scrollView: MyScrollView, x: Int, y: Int, oldx: Int, oldy: Int) {
-                mWeekScrollY = y
-                weeklyAdapter.updateScrollY(week_view_view_pager.currentItem, y)
-            }
-        })
-        week_view_hours_scrollview.setOnTouchListener { view, motionEvent -> true }
-    }
-
-    fun updateHoursTopMargin(margin: Int) {
-        week_view_hours_divider.layoutParams.height = margin
-        week_view_hours_scrollview.requestLayout()
-    }
-
-    private fun getWeekTimestamps(targetWeekTS: Int): List<Int> {
-        val weekTSs = ArrayList<Int>(PREFILLED_WEEKS)
-        for (i in -PREFILLED_WEEKS / 2..PREFILLED_WEEKS / 2) {
-            weekTSs.add(Formatter.getDateTimeFromTS(targetWeekTS).plusWeeks(i).seconds())
-        }
-        return weekTSs
-    }
-
-    private fun setupWeeklyActionbarTitle(timestamp: Int) {
-        val startDateTime = Formatter.getDateTimeFromTS(timestamp)
-        val endDateTime = Formatter.getDateTimeFromTS(timestamp + WEEK_SECONDS)
-        val startMonthName = Formatter.getMonthName(applicationContext, startDateTime.monthOfYear)
-        if (startDateTime.monthOfYear == endDateTime.monthOfYear) {
-            var newTitle = startMonthName
-            if (startDateTime.year != DateTime().year)
-                newTitle += " - ${startDateTime.year}"
-            supportActionBar?.title = newTitle
         } else {
-            val endMonthName = Formatter.getMonthName(applicationContext, endDateTime.monthOfYear)
-            supportActionBar?.title = "$startMonthName - $endMonthName"
+            search_placeholder.beVisible()
+            search_results_list.beGone()
         }
-        supportActionBar?.subtitle = "${getString(R.string.week)} ${startDateTime.plusDays(3).weekOfWeekyear}"
     }
 
-    private fun fillYearlyViewPager() {
-        main_weekly_scrollview.beGone()
-        calendar_fab.beGone()
-        val targetYear = DateTime().toString(Formatter.YEAR_PATTERN).toInt()
-        val years = getYears(targetYear)
-        val yearlyAdapter = MyYearPagerAdapter(supportFragmentManager, years, this)
-
-        mDefaultYearlyPage = years.size / 2
-        main_view_pager.apply {
-            adapter = yearlyAdapter
-            addOnPageChangeListener(object : ViewPager.OnPageChangeListener {
-                override fun onPageScrollStateChanged(state: Int) {
-                }
-
-                override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
-                }
-
-                override fun onPageSelected(position: Int) {
-                    invalidateOptionsMenu()
-                    if (position < years.size) {
-                        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${years[position]}"
-                    }
-                }
-            })
-            currentItem = mDefaultYearlyPage
-            beVisible()
-        }
-        supportActionBar?.title = "${getString(R.string.app_launcher_name)} - ${years[years.size / 2]}"
-        calendar_event_list_holder.beGone()
-    }
-
-    private fun getYears(targetYear: Int): List<Int> {
-        val years = ArrayList<Int>(PREFILLED_YEARS)
-        years += targetYear - PREFILLED_YEARS / 2..targetYear + PREFILLED_YEARS / 2
-        return years
-    }
-
-    private fun fillEventsList() {
-        main_view_pager.adapter = null
-        main_view_pager.beGone()
-        main_weekly_scrollview.beGone()
-        calendar_event_list_holder.beVisible()
-        supportFragmentManager.beginTransaction().replace(R.id.calendar_event_list_holder, EventListFragment(), "").commit()
-    }
-
-    override fun goLeft() {
-        main_view_pager.currentItem = main_view_pager.currentItem - 1
-    }
-
-    override fun goRight() {
-        main_view_pager.currentItem = main_view_pager.currentItem + 1
-    }
-
-    override fun goToDateTime(dateTime: DateTime) {
-        fillMonthlyViewPager(Formatter.getDayCodeFromDateTime(dateTime))
-        mIsMonthSelected = true
+    // only used at active search
+    override fun refreshItems() {
+        searchQueryChanged(mLatestSearchQuery)
+        refreshViewPager()
     }
 
     private fun openDayAt(timestamp: Long) {
         val dayCode = Formatter.getDayCodeFromTS((timestamp / 1000).toInt())
-        openDayCode(dayCode)
-    }
-
-    private fun openDayCode(dayCode: String) {
-        Intent(this, DayActivity::class.java).apply {
-            putExtra(DAY_CODE, dayCode)
-            startActivity(this)
-        }
+        calendar_fab.beVisible()
+        config.storedView = DAILY_VIEW
+        updateViewPager(dayCode)
     }
 
     private fun getHolidayRadioItems(): ArrayList<RadioItem> {
@@ -773,11 +756,15 @@ class MainActivity : SimpleActivity(), NavigationListener {
         LinkedHashMap<String, String>().apply {
             put("Algeria", "algeria.ics")
             put("Argentina", "argentina.ics")
+            put("Australia", "australia.ics")
             put("België", "belgium.ics")
             put("Bolivia", "bolivia.ics")
             put("Brasil", "brazil.ics")
             put("Canada", "canada.ics")
+            put("China", "china.ics")
+            put("Colombia", "colombia.ics")
             put("Česká republika", "czech.ics")
+            put("Danmark", "denmark.ics")
             put("Deutschland", "germany.ics")
             put("Eesti", "estonia.ics")
             put("España", "spain.ics")
@@ -785,10 +772,18 @@ class MainActivity : SimpleActivity(), NavigationListener {
             put("France", "france.ics")
             put("Hanguk", "southkorea.ics")
             put("Hellas", "greece.ics")
+            put("Hrvatska", "croatia.ics")
             put("India", "india.ics")
+            put("Indonesia", "indonesia.ics")
             put("Ísland", "iceland.ics")
             put("Italia", "italy.ics")
+            put("Latvija", "latvia.ics")
+            put("Lietuva", "lithuania.ics")
+            put("Luxemburg", "luxembourg.ics")
+            put("Makedonija", "macedonia.ics")
+            put("Malaysia", "malaysia.ics")
             put("Magyarország", "hungary.ics")
+            put("México", "mexico.ics")
             put("Nederland", "netherlands.ics")
             put("日本", "japan.ics")
             put("Norge", "norway.ics")
@@ -797,11 +792,16 @@ class MainActivity : SimpleActivity(), NavigationListener {
             put("Polska", "poland.ics")
             put("Portugal", "portugal.ics")
             put("Россия", "russia.ics")
+            put("România", "romania.ics")
             put("Schweiz", "switzerland.ics")
+            put("Singapore", "singapore.ics")
+            put("Srbija", "serbia.ics")
             put("Slovenija", "slovenia.ics")
             put("Slovensko", "slovakia.ics")
+            put("South Africa", "southafrica.ics")
             put("Suomi", "finland.ics")
             put("Sverige", "sweden.ics")
+            put("Ukraine", "ukraine.ics")
             put("United Kingdom", "unitedkingdom.ics")
             put("United States", "unitedstates.ics")
 
@@ -841,6 +841,9 @@ class MainActivity : SimpleActivity(), NavigationListener {
             add(Release(86, R.string.release_86))
             add(Release(88, R.string.release_88))
             add(Release(98, R.string.release_98))
+            add(Release(117, R.string.release_117))
+            add(Release(119, R.string.release_119))
+            add(Release(129, R.string.release_129))
             checkWhatsNew(this, BuildConfig.VERSION_CODE)
         }
     }

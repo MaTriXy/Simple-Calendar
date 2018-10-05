@@ -9,26 +9,26 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.simplemobiletools.calendar.R
+import com.simplemobiletools.calendar.activities.MainActivity
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.helpers.YEAR_LABEL
 import com.simplemobiletools.calendar.helpers.YearlyCalendarImpl
-import com.simplemobiletools.calendar.interfaces.NavigationListener
 import com.simplemobiletools.calendar.interfaces.YearlyCalendar
 import com.simplemobiletools.calendar.models.DayYearly
 import com.simplemobiletools.calendar.views.SmallMonthView
+import com.simplemobiletools.commons.extensions.getAdjustedPrimaryColor
 import com.simplemobiletools.commons.extensions.updateTextColors
 import kotlinx.android.synthetic.main.fragment_year.view.*
 import org.joda.time.DateTime
 import java.util.*
 
 class YearFragment : Fragment(), YearlyCalendar {
-    var mListener: NavigationListener? = null
     private var mYear = 0
     private var mSundayFirst = false
     private var lastHash = 0
+    private var mCalendar: YearlyCalendarImpl? = null
 
     lateinit var mView: View
-    lateinit var mCalendar: YearlyCalendarImpl
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         mView = inflater.inflate(R.layout.fragment_year, container, false)
@@ -41,6 +41,11 @@ class YearFragment : Fragment(), YearlyCalendar {
         return mView
     }
 
+    override fun onPause() {
+        super.onPause()
+        mSundayFirst = context!!.config.isSundayFirst
+    }
+
     override fun onResume() {
         super.onResume()
         val sundayFirst = context!!.config.isSundayFirst
@@ -48,14 +53,14 @@ class YearFragment : Fragment(), YearlyCalendar {
             mSundayFirst = sundayFirst
             setupMonths()
         }
-        updateEvents()
+        updateCalendar()
     }
 
-    fun updateEvents() {
-        mCalendar.getEvents(mYear)
+    fun updateCalendar() {
+        mCalendar?.getEvents(mYear)
     }
 
-    fun setupMonths() {
+    private fun setupMonths() {
         val dateTime = DateTime().withDate(mYear, 2, 1).withHourOfDay(12)
         val days = dateTime.dayOfMonth().maximumValue
         mView.month_2.setDays(days)
@@ -66,12 +71,13 @@ class YearFragment : Fragment(), YearlyCalendar {
         for (i in 1..12) {
             val monthView = mView.findViewById<SmallMonthView>(res.getIdentifier("month_" + i, "id", context!!.packageName))
             var dayOfWeek = dateTime.withMonthOfYear(i).dayOfWeek().get()
-            if (!mSundayFirst)
+            if (!mSundayFirst) {
                 dayOfWeek--
+            }
 
             monthView.firstDay = dayOfWeek
             monthView.setOnClickListener {
-                mListener?.goToDateTime(DateTime().withDate(mYear, i, 1))
+                (activity as MainActivity).openMonthFromYearly(DateTime().withDate(mYear, i, 1))
             }
         }
     }
@@ -80,7 +86,7 @@ class YearFragment : Fragment(), YearlyCalendar {
         val now = DateTime()
         if (now.year == mYear) {
             val monthLabel = mView.findViewById<TextView>(res.getIdentifier("month_${now.monthOfYear}_label", "id", context!!.packageName))
-            monthLabel.setTextColor(context!!.config.primaryColor)
+            monthLabel.setTextColor(context!!.getAdjustedPrimaryColor())
 
             val monthView = mView.findViewById<SmallMonthView>(res.getIdentifier("month_${now.monthOfYear}", "id", context!!.packageName))
             monthView.todaysId = now.dayOfMonth

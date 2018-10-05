@@ -21,10 +21,11 @@ import org.joda.time.DateTime
 class MyWidgetMonthlyProvider : AppWidgetProvider() {
     private val PREV = "prev"
     private val NEXT = "next"
+    private val GO_TO_TODAY = "go_to_today"
     private val NEW_EVENT = "new_event"
 
     companion object {
-        var targetDate = DateTime.now()
+        private var targetDate = DateTime.now().withDayOfMonth(1)
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -32,36 +33,7 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
     }
 
     private fun performUpdate(context: Context) {
-        val largerFontSize = context.config.getFontSize() + 3f
-        val textColor = context.config.widgetTextColor
-        val resources = context.resources
-
-        val appWidgetManager = AppWidgetManager.getInstance(context)
-        appWidgetManager.getAppWidgetIds(getComponentName(context)).forEach {
-            val views = RemoteViews(context.packageName, R.layout.fragment_month_widget)
-            views.setBackgroundColor(R.id.calendar_holder, context.config.widgetBgColor)
-
-            views.setTextColor(R.id.top_value, textColor)
-            views.setTextSize(R.id.top_value, largerFontSize)
-
-            var bmp = resources.getColoredBitmap(R.drawable.ic_pointer_left, textColor)
-            views.setImageViewBitmap(R.id.top_left_arrow, bmp)
-
-            bmp = resources.getColoredBitmap(R.drawable.ic_pointer_right, textColor)
-            views.setImageViewBitmap(R.id.top_right_arrow, bmp)
-
-            bmp = resources.getColoredBitmap(R.drawable.ic_plus, textColor)
-            views.setImageViewBitmap(R.id.top_new_event, bmp)
-
-            setupIntent(context, views, PREV, R.id.top_left_arrow)
-            setupIntent(context, views, NEXT, R.id.top_right_arrow)
-            setupIntent(context, views, NEW_EVENT, R.id.top_new_event)
-            setupAppOpenIntent(context, views, R.id.top_value)
-            updateDayLabels(context, views, resources, textColor)
-
-            appWidgetManager.updateAppWidget(it, views)
-            MonthlyCalendarImpl(monthlyCalendar, context).getMonth(targetDate)
-        }
+        MonthlyCalendarImpl(monthlyCalendar, context).getMonth(targetDate)
     }
 
     private fun getComponentName(context: Context) = ComponentName(context, MyWidgetMonthlyProvider::class.java)
@@ -74,14 +46,17 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
         }
     }
 
-    private fun setupAppOpenIntent(context: Context, views: RemoteViews, id: Int) {
-        val intent = Intent(context, SplashActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(context, 0, intent, 0)
-        views.setOnClickPendingIntent(id, pendingIntent)
+    private fun setupAppOpenIntent(context: Context, views: RemoteViews, id: Int, dayCode: String) {
+        (context.getLaunchIntent() ?: Intent(context, SplashActivity::class.java)).apply {
+            putExtra(DAY_CODE, dayCode)
+            putExtra(OPEN_MONTH, true)
+            val pendingIntent = PendingIntent.getActivity(context, Integer.parseInt(dayCode.substring(0, 6)), this, 0)
+            views.setOnClickPendingIntent(id, pendingIntent)
+        }
     }
 
     private fun setupDayOpenIntent(context: Context, views: RemoteViews, id: Int, dayCode: String) {
-        Intent(context, SplashActivity::class.java).apply {
+        (context.getLaunchIntent() ?: Intent(context, SplashActivity::class.java)).apply {
             putExtra(DAY_CODE, dayCode)
             val pendingIntent = PendingIntent.getActivity(context, Integer.parseInt(dayCode), this, 0)
             views.setOnClickPendingIntent(id, pendingIntent)
@@ -92,6 +67,7 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
         when (intent.action) {
             PREV -> getPrevMonth(context)
             NEXT -> getNextMonth(context)
+            GO_TO_TODAY -> goToToday(context)
             NEW_EVENT -> context.launchNewEventIntent()
             else -> super.onReceive(context, intent)
         }
@@ -107,9 +83,15 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
         MonthlyCalendarImpl(monthlyCalendar, context).getMonth(targetDate!!)
     }
 
+    private fun goToToday(context: Context) {
+        targetDate = DateTime.now().withDayOfMonth(1)
+        MonthlyCalendarImpl(monthlyCalendar, context).getMonth(targetDate!!)
+    }
+
     private fun updateDays(context: Context, views: RemoteViews, days: List<DayMonthly>) {
-        val displayWeekNumbers = context.config.displayWeekNumbers
+        val displayWeekNumbers = context.config.showWeekNumbers
         val textColor = context.config.widgetTextColor
+        val dimPastEvents = context.config.dimPastEvents
         val smallerFontSize = context.config.getFontSize() - 3f
         val res = context.resources
         val len = days.size
@@ -143,7 +125,7 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
                 var backgroundColor = it.color
                 var eventTextColor = backgroundColor.getContrastColor()
 
-                if (!day.isThisMonth) {
+                if (!day.isThisMonth || (dimPastEvents && it.isPastEvent)) {
                     eventTextColor = eventTextColor.adjustAlpha(0.25f)
                     backgroundColor = backgroundColor.adjustAlpha(0.25f)
                 }
@@ -175,13 +157,51 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
     }
 
     private val monthlyCalendar = object : MonthlyCalendar {
-        override fun updateMonthlyCalendar(context: Context, month: String, days: List<DayMonthly>, checkedEvents: Boolean) {
+        override fun updateMonthlyCalendar(context: Context, month: String, days: ArrayList<DayMonthly>, checkedEvents: Boolean, currTargetDate: DateTime) {
+            val largerFontSize = context.config.getFontSize() + 3f
+            val textColor = context.config.widgetTextColor
+            val resources = context.resources
+
             val appWidgetManager = AppWidgetManager.getInstance(context)
             appWidgetManager.getAppWidgetIds(getComponentName(context)).forEach {
                 val views = RemoteViews(context.packageName, R.layout.fragment_month_widget)
                 views.setText(R.id.top_value, month)
+
+                views.setBackgroundColor(R.id.calendar_holder, context.config.widgetBgColor)
+
+                views.setTextColor(R.id.top_value, textColor)
+                views.setTextSize(R.id.top_value, largerFontSize)
+
+                var bmp = resources.getColoredBitmap(R.drawable.ic_pointer_left, textColor)
+                views.setImageViewBitmap(R.id.top_left_arrow, bmp)
+
+                bmp = resources.getColoredBitmap(R.drawable.ic_pointer_right, textColor)
+                views.setImageViewBitmap(R.id.top_right_arrow, bmp)
+
+                bmp = resources.getColoredBitmap(R.drawable.ic_today, textColor)
+                views.setImageViewBitmap(R.id.top_go_to_today, bmp)
+
+                bmp = resources.getColoredBitmap(R.drawable.ic_plus, textColor)
+                views.setImageViewBitmap(R.id.top_new_event, bmp)
+
+                val shouldGoToTodayBeVisible = currTargetDate.withTime(0, 0, 0, 0) != DateTime.now().withDayOfMonth(1).withTime(0, 0, 0, 0)
+                views.setVisibleIf(R.id.top_go_to_today, shouldGoToTodayBeVisible)
+
+                updateDayLabels(context, views, resources, textColor)
                 updateDays(context, views, days)
-                appWidgetManager.updateAppWidget(it, views)
+
+                setupIntent(context, views, PREV, R.id.top_left_arrow)
+                setupIntent(context, views, NEXT, R.id.top_right_arrow)
+                setupIntent(context, views, GO_TO_TODAY, R.id.top_go_to_today)
+                setupIntent(context, views, NEW_EVENT, R.id.top_new_event)
+
+                val monthCode = days.firstOrNull { it.code.substring(6) == "01" }?.code ?: Formatter.getTodayCode()
+                setupAppOpenIntent(context, views, R.id.top_value, monthCode)
+
+                try {
+                    appWidgetManager.updateAppWidget(it, views)
+                } catch (ignored: RuntimeException) {
+                }
             }
         }
     }
@@ -190,18 +210,18 @@ class MyWidgetMonthlyProvider : AppWidgetProvider() {
         val sundayFirst = context.config.isSundayFirst
         val smallerFontSize = context.config.getFontSize()
         val packageName = context.packageName
-        val letters = letterIDs
+        val letters = context.resources.getStringArray(R.array.week_day_letters)
         for (i in 0..6) {
             val id = resources.getIdentifier("label_$i", "id", packageName)
             views.setTextColor(id, textColor)
             views.setTextSize(id, smallerFontSize)
 
             var index = i
-            if (!sundayFirst) {
-                index = (index + 1) % letters.size
+            if (sundayFirst) {
+                index = (index + 6) % letters.size
             }
 
-            views.setText(id, resources.getString(letters[index]))
+            views.setText(id, letters[index])
         }
     }
 }

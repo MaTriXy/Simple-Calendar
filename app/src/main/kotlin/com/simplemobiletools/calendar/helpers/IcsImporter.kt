@@ -28,20 +28,23 @@ class IcsImporter(val activity: SimpleActivity) {
     private var curRepeatInterval = 0
     private var curRepeatLimit = 0
     private var curRepeatRule = 0
-    private var curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
+    private var curEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
     private var curLastModified = 0L
     private var curLocation = ""
     private var curCategoryColor = -2
     private var isNotificationDescription = false
     private var isProperReminderAction = false
+    private var isDescription = false
     private var curReminderTriggerMinutes = -1
 
     private var eventsImported = 0
     private var eventsFailed = 0
 
-    fun importEvents(path: String, defaultEventType: Int): ImportResult {
+    fun importEvents(path: String, defaultEventTypeId: Int, calDAVCalendarId: Int, overrideFileEventTypes: Boolean): ImportResult {
         try {
+            val eventTypes = activity.dbHelper.getEventTypesSync()
             val existingEvents = activity.dbHelper.getEventsWithImportIds()
+            val eventsToInsert = ArrayList<Event>()
             var prevLine = ""
 
             val inputStream = if (path.contains("/")) {
@@ -53,17 +56,26 @@ class IcsImporter(val activity: SimpleActivity) {
             inputStream.bufferedReader().use {
                 while (true) {
                     var line = it.readLine() ?: break
-                    if (line.trim().isEmpty())
+                    if (line.trim().isEmpty()) {
                         continue
+                    }
 
                     if (line.substring(0, 1) == " ") {
                         line = prevLine + line.trim()
                         eventsFailed--
                     }
 
+                    if (isDescription) {
+                        if (line.startsWith('\t')) {
+                            curDescription += line.trimStart('\t').replace("\\n", "\n")
+                        } else {
+                            isDescription = false
+                        }
+                    }
+
                     if (line == BEGIN_EVENT) {
                         resetValues()
-                        curEventType = defaultEventType
+                        curEventTypeId = defaultEventTypeId
                     } else if (line.startsWith(DTSTART)) {
                         curStart = getTimestamp(line.substring(DTSTART.length))
                     } else if (line.startsWith(DTEND)) {
@@ -73,9 +85,10 @@ class IcsImporter(val activity: SimpleActivity) {
                         curEnd = curStart + Parser().parseDurationSeconds(duration)
                     } else if (line.startsWith(SUMMARY) && !isNotificationDescription) {
                         curTitle = line.substring(SUMMARY.length)
-                        curTitle = getTitle(curTitle).replace("\\n", "\n")
+                        curTitle = getTitle(curTitle).replace("\\n", "\n").replace("\\,", ",")
                     } else if (line.startsWith(DESCRIPTION) && !isNotificationDescription) {
-                        curDescription = line.substring(DESCRIPTION.length).replace("\\n", "\n")
+                        curDescription = line.substring(DESCRIPTION.length).replace("\\n", "\n").replace("\\,", ",")
+                        isDescription = true
                     } else if (line.startsWith(UID)) {
                         curImportId = line.substring(UID.length).trim()
                     } else if (line.startsWith(RRULE)) {
@@ -93,54 +106,63 @@ class IcsImporter(val activity: SimpleActivity) {
                         if (color.trimStart('-').areDigitsOnly()) {
                             curCategoryColor = Integer.parseInt(color)
                         }
-                    } else if (line.startsWith(CATEGORIES)) {
+                    } else if (line.startsWith(CATEGORIES) && !overrideFileEventTypes) {
                         val categories = line.substring(CATEGORIES.length)
                         tryAddCategories(categories, activity)
                     } else if (line.startsWith(LAST_MODIFIED)) {
                         curLastModified = getTimestamp(line.substring(LAST_MODIFIED.length)) * 1000L
                     } else if (line.startsWith(EXDATE)) {
                         var value = line.substring(EXDATE.length)
-                        if (value.endsWith('}'))
+                        if (value.endsWith('}')) {
                             value = value.substring(0, value.length - 1)
+                        }
 
                         curRepeatExceptions.add(getTimestamp(value))
                     } else if (line.startsWith(LOCATION)) {
-                        curLocation = line.substring(LOCATION.length)
+                        curLocation = getLocation(line.substring(LOCATION.length).replace("\\,", ","))
                     } else if (line == END_ALARM) {
                         if (isProperReminderAction && curReminderTriggerMinutes != -1) {
                             curReminderMinutes.add(curReminderTriggerMinutes)
                         }
                     } else if (line == END_EVENT) {
-                        if (curStart != -1 && curEnd == -1)
+                        if (curStart != -1 && curEnd == -1) {
                             curEnd = curStart
+                        }
 
-                        if (curTitle.isEmpty() || curStart == -1)
+                        if (curTitle.isEmpty() || curStart == -1) {
                             continue
+                        }
 
                         val eventToUpdate = existingEvents.firstOrNull { curImportId.isNotEmpty() && curImportId == it.importId }
                         if (eventToUpdate != null && eventToUpdate.lastUpdated >= curLastModified) {
                             continue
                         }
 
+                        val eventType = eventTypes.firstOrNull { it.id == curEventTypeId }
+                        val source = if (calDAVCalendarId == 0 || eventType?.isSyncedEventType() == false) SOURCE_IMPORTED_ICS else "$CALDAV-$calDAVCalendarId"
                         val event = Event(0, curStart, curEnd, curTitle, curDescription, curReminderMinutes.getOrElse(0, { -1 }),
                                 curReminderMinutes.getOrElse(1, { -1 }), curReminderMinutes.getOrElse(2, { -1 }), curRepeatInterval,
-                                curImportId, curFlags, curRepeatLimit, curRepeatRule, curEventType, lastUpdated = curLastModified,
-                                source = SOURCE_IMPORTED_ICS, location = curLocation)
+                                curImportId, curFlags, curRepeatLimit, curRepeatRule, curEventTypeId, lastUpdated = curLastModified,
+                                source = source, location = curLocation)
 
                         if (event.getIsAllDay() && curEnd > curStart) {
                             event.endTS -= DAY
                         }
 
                         if (eventToUpdate == null) {
-                            activity.dbHelper.insert(event, false) {
-                                for (exceptionTS in curRepeatExceptions) {
-                                    activity.dbHelper.addEventRepeatException(it, exceptionTS)
+                            if (curRepeatExceptions.isEmpty()) {
+                                eventsToInsert.add(event)
+                            } else {
+                                activity.dbHelper.insert(event, true) {
+                                    for (exceptionTS in curRepeatExceptions) {
+                                        activity.dbHelper.addEventRepeatException(it, exceptionTS, true)
+                                    }
+                                    existingEvents.add(event)
                                 }
-                                existingEvents.add(event)
                             }
                         } else {
                             event.id = eventToUpdate.id
-                            activity.dbHelper.update(event, true) {}
+                            activity.dbHelper.update(event, true)
                         }
                         eventsImported++
                         resetValues()
@@ -148,6 +170,8 @@ class IcsImporter(val activity: SimpleActivity) {
                     prevLine = line
                 }
             }
+
+            activity.dbHelper.insertEvents(eventsToInsert, true)
         } catch (e: Exception) {
             activity.showErrorToast(e, Toast.LENGTH_LONG)
             eventsFailed++
@@ -164,8 +188,9 @@ class IcsImporter(val activity: SimpleActivity) {
         return try {
             if (fullString.startsWith(';')) {
                 val value = fullString.substring(fullString.lastIndexOf(':') + 1)
-                if (!value.contains("T"))
+                if (!value.contains("T")) {
                     curFlags = curFlags or FLAG_ALL_DAY
+                }
 
                 Parser().parseDateTimeValue(value)
             } else {
@@ -178,6 +203,14 @@ class IcsImporter(val activity: SimpleActivity) {
         }
     }
 
+    private fun getLocation(fullString: String): String {
+        return if (fullString.startsWith(":")) {
+            fullString.trimStart(':')
+        } else {
+            fullString.substringAfter(':').trim()
+        }
+    }
+
     private fun tryAddCategories(categories: String, context: Context) {
         val eventTypeTitle = if (categories.contains(",")) {
             categories.split(",")[0]
@@ -186,7 +219,7 @@ class IcsImporter(val activity: SimpleActivity) {
         }
 
         val eventId = context.dbHelper.getEventTypeIdWithTitle(eventTypeTitle)
-        curEventType = if (eventId == -1) {
+        curEventTypeId = if (eventId == -1) {
             val newTypeColor = if (curCategoryColor == -2) context.resources.getColor(R.color.color_primary) else curCategoryColor
             val eventType = EventType(0, eventTypeTitle, newTypeColor)
             context.dbHelper.insertEventType(eventType)
@@ -199,7 +232,7 @@ class IcsImporter(val activity: SimpleActivity) {
         return if (title.startsWith(";") && title.contains(":")) {
             title.substring(title.lastIndexOf(':') + 1)
         } else {
-            title.substring(1, Math.min(title.length, 80))
+            title.substring(1, Math.min(title.length, 180))
         }
     }
 
@@ -215,7 +248,7 @@ class IcsImporter(val activity: SimpleActivity) {
         curRepeatInterval = 0
         curRepeatLimit = 0
         curRepeatRule = 0
-        curEventType = DBHelper.REGULAR_EVENT_TYPE_ID
+        curEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
         curLastModified = 0L
         curCategoryColor = -2
         curLocation = ""

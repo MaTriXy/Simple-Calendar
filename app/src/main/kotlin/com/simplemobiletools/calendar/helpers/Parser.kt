@@ -2,9 +2,11 @@ package com.simplemobiletools.calendar.helpers
 
 import com.simplemobiletools.calendar.extensions.isXMonthlyRepetition
 import com.simplemobiletools.calendar.extensions.isXWeeklyRepetition
+import com.simplemobiletools.calendar.extensions.isXYearlyRepetition
 import com.simplemobiletools.calendar.extensions.seconds
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.RepeatRule
+import com.simplemobiletools.commons.helpers.*
 import org.joda.time.DateTimeZone
 import org.joda.time.format.DateTimeFormat
 
@@ -28,8 +30,8 @@ class Parser {
                 if (value == WEEKLY) {
                     val start = Formatter.getDateTimeFromTS(startTS)
                     repeatRule = Math.pow(2.0, (start.dayOfWeek - 1).toDouble()).toInt()
-                } else if (value == MONTHLY) {
-                    repeatRule = REPEAT_MONTH_SAME_DAY
+                } else if (value == MONTHLY || value == YEARLY) {
+                    repeatRule = REPEAT_SAME_DAY
                 }
             } else if (key == COUNT) {
                 repeatLimit = -value.toInt()
@@ -40,11 +42,11 @@ class Parser {
             } else if (key == BYDAY) {
                 if (repeatInterval.isXWeeklyRepetition()) {
                     repeatRule = handleRepeatRule(value)
-                } else if (repeatInterval.isXMonthlyRepetition()) {
-                    repeatRule = if (value.startsWith("-1")) REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST else REPEAT_MONTH_ORDER_WEEKDAY
+                } else if (repeatInterval.isXMonthlyRepetition() || repeatInterval.isXYearlyRepetition()) {
+                    repeatRule = if (value.startsWith("-1")) REPEAT_ORDER_WEEKDAY_USE_LAST else REPEAT_ORDER_WEEKDAY
                 }
             } else if (key == BYMONTHDAY && value.toInt() == -1) {
-                repeatRule = REPEAT_MONTH_LAST_DAY
+                repeatRule = REPEAT_LAST_DAY
             }
         }
         return RepeatRule(repeatInterval, repeatRule, repeatLimit)
@@ -61,19 +63,19 @@ class Parser {
     private fun handleRepeatRule(value: String): Int {
         var newRepeatRule = 0
         if (value.contains(MO))
-            newRepeatRule = newRepeatRule or MONDAY
+            newRepeatRule = newRepeatRule or MONDAY_BIT
         if (value.contains(TU))
-            newRepeatRule = newRepeatRule or TUESDAY
+            newRepeatRule = newRepeatRule or TUESDAY_BIT
         if (value.contains(WE))
-            newRepeatRule = newRepeatRule or WEDNESDAY
+            newRepeatRule = newRepeatRule or WEDNESDAY_BIT
         if (value.contains(TH))
-            newRepeatRule = newRepeatRule or THURSDAY
+            newRepeatRule = newRepeatRule or THURSDAY_BIT
         if (value.contains(FR))
-            newRepeatRule = newRepeatRule or FRIDAY
+            newRepeatRule = newRepeatRule or FRIDAY_BIT
         if (value.contains(SA))
-            newRepeatRule = newRepeatRule or SATURDAY
+            newRepeatRule = newRepeatRule or SATURDAY_BIT
         if (value.contains(SU))
-            newRepeatRule = newRepeatRule or SUNDAY
+            newRepeatRule = newRepeatRule or SUNDAY_BIT
         return newRepeatRule
     }
 
@@ -83,7 +85,7 @@ class Parser {
             parseLongFormat(edited, value.endsWith("Z"))
         } else {
             val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd")
-            dateTimeFormat.parseDateTime(edited).withZoneRetainFields(DateTimeZone.getDefault()).withHourOfDay(1).seconds()
+            dateTimeFormat.parseDateTime(edited).withHourOfDay(5).seconds()
         }
     }
 
@@ -102,8 +104,9 @@ class Parser {
         val freq = getFreq(repeatInterval)
         val interval = getInterval(repeatInterval)
         val repeatLimit = getRepeatLimitString(event)
+        val byMonth = getByMonth(event)
         val byDay = getByDay(event)
-        return "$FREQ=$freq;$INTERVAL=$interval$repeatLimit$byDay"
+        return "$FREQ=$freq;$INTERVAL=$interval$repeatLimit$byMonth$byDay"
     }
 
     private fun getFreq(interval: Int) = when {
@@ -126,14 +129,22 @@ class Parser {
         else -> ";$UNTIL=${Formatter.getDayCodeFromTS(event.repeatLimit)}"
     }
 
+    private fun getByMonth(event: Event) = when {
+        event.repeatInterval.isXYearlyRepetition() -> {
+            val start = Formatter.getDateTimeFromTS(event.startTS)
+            ";$BYMONTH=${start.monthOfYear}"
+        }
+        else -> ""
+    }
+
     private fun getByDay(event: Event) = when {
         event.repeatInterval.isXWeeklyRepetition() -> {
             val days = getByDayString(event.repeatRule)
             ";$BYDAY=$days"
         }
-        event.repeatInterval.isXMonthlyRepetition() -> when (event.repeatRule) {
-            REPEAT_MONTH_LAST_DAY -> ";$BYMONTHDAY=-1"
-            REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST, REPEAT_MONTH_ORDER_WEEKDAY -> {
+        event.repeatInterval.isXMonthlyRepetition() || event.repeatInterval.isXYearlyRepetition() -> when (event.repeatRule) {
+            REPEAT_LAST_DAY -> ";$BYMONTHDAY=-1"
+            REPEAT_ORDER_WEEKDAY_USE_LAST, REPEAT_ORDER_WEEKDAY -> {
                 val start = Formatter.getDateTimeFromTS(event.startTS)
                 val dayOfMonth = start.dayOfMonth
                 val isLastWeekday = start.monthOfYear != start.plusDays(7).monthOfYear
@@ -148,19 +159,19 @@ class Parser {
 
     private fun getByDayString(rule: Int): String {
         var result = ""
-        if (rule and MONDAY != 0)
+        if (rule and MONDAY_BIT != 0)
             result += "$MO,"
-        if (rule and TUESDAY != 0)
+        if (rule and TUESDAY_BIT != 0)
             result += "$TU,"
-        if (rule and WEDNESDAY != 0)
+        if (rule and WEDNESDAY_BIT != 0)
             result += "$WE,"
-        if (rule and THURSDAY != 0)
+        if (rule and THURSDAY_BIT != 0)
             result += "$TH,"
-        if (rule and FRIDAY != 0)
+        if (rule and FRIDAY_BIT != 0)
             result += "$FR,"
-        if (rule and SATURDAY != 0)
+        if (rule and SATURDAY_BIT != 0)
             result += "$SA,"
-        if (rule and SUNDAY != 0)
+        if (rule and SUNDAY_BIT != 0)
             result += "$SU,"
         return result.trimEnd(',')
     }

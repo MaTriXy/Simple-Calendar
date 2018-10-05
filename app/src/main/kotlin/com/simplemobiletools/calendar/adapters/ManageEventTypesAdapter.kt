@@ -13,7 +13,7 @@ import com.simplemobiletools.calendar.models.EventType
 import com.simplemobiletools.commons.adapters.MyRecyclerViewAdapter
 import com.simplemobiletools.commons.dialogs.ConfirmationDialog
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
-import com.simplemobiletools.commons.extensions.setBackgroundWithStroke
+import com.simplemobiletools.commons.extensions.setFillWithStroke
 import com.simplemobiletools.commons.extensions.toast
 import com.simplemobiletools.commons.models.RadioItem
 import com.simplemobiletools.commons.views.MyRecyclerView
@@ -21,16 +21,20 @@ import kotlinx.android.synthetic.main.item_event_type.view.*
 import java.util.*
 
 class ManageEventTypesAdapter(activity: SimpleActivity, val eventTypes: ArrayList<EventType>, val listener: DeleteEventTypesListener?, recyclerView: MyRecyclerView,
-                              itemClick: (Any) -> Unit) : MyRecyclerViewAdapter(activity, recyclerView, itemClick) {
+                              itemClick: (Any) -> Unit) : MyRecyclerViewAdapter(activity, recyclerView, null, itemClick) {
+
+    init {
+        setupDragListener(true)
+    }
 
     override fun getActionMenuId() = R.menu.cab_event_type
 
     override fun prepareActionMode(menu: Menu) {}
 
-    override fun prepareItemSelection(view: View) {}
+    override fun prepareItemSelection(viewHolder: ViewHolder) {}
 
-    override fun markItemSelection(select: Boolean, view: View?) {
-        view?.event_item_frame?.isSelected = select
+    override fun markViewHolderSelection(select: Boolean, viewHolder: ViewHolder?) {
+        viewHolder?.itemView?.event_item_frame?.isSelected = select
     }
 
     override fun actionItemPressed(id: Int) {
@@ -41,11 +45,13 @@ class ManageEventTypesAdapter(activity: SimpleActivity, val eventTypes: ArrayLis
 
     override fun getSelectableItemCount() = eventTypes.size
 
-    override fun onCreateViewHolder(parent: ViewGroup?, viewType: Int) = createViewHolder(R.layout.item_event_type, parent)
+    override fun getIsItemSelectable(position: Int) = true
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = createViewHolder(R.layout.item_event_type, parent)
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val eventType = eventTypes[position]
-        val view = holder.bindView(eventType) { itemView, layoutPosition ->
+        val view = holder.bindView(eventType, true, true) { itemView, layoutPosition ->
             setupView(itemView, eventType)
         }
         bindViewHolder(holder, position, view)
@@ -56,7 +62,7 @@ class ManageEventTypesAdapter(activity: SimpleActivity, val eventTypes: ArrayLis
     private fun setupView(view: View, eventType: EventType) {
         view.apply {
             event_type_title.text = eventType.getDisplayTitle()
-            event_type_color.setBackgroundWithStroke(eventType.color, activity.config.backgroundColor)
+            event_type_color.setFillWithStroke(eventType.color, activity.config.backgroundColor)
             event_type_title.setTextColor(textColor)
         }
     }
@@ -101,7 +107,8 @@ class ManageEventTypesAdapter(activity: SimpleActivity, val eventTypes: ArrayLis
         }
 
         eventTypes.removeAll(eventTypesToDelete)
-        listener?.deleteEventTypes(eventTypesToDelete, deleteEvents)
-        removeSelectedItems()
+        if (listener?.deleteEventTypes(eventTypesToDelete, deleteEvents) == true) {
+            removeSelectedItems()
+        }
     }
 }

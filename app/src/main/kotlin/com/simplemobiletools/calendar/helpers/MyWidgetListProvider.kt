@@ -9,15 +9,11 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.RemoteViews
 import com.simplemobiletools.calendar.R
-import com.simplemobiletools.calendar.activities.DayActivity
 import com.simplemobiletools.calendar.activities.SplashActivity
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.extensions.launchNewEventIntent
 import com.simplemobiletools.calendar.services.WidgetService
-import com.simplemobiletools.commons.extensions.getColoredBitmap
-import com.simplemobiletools.commons.extensions.setBackgroundColor
-import com.simplemobiletools.commons.extensions.setText
-import com.simplemobiletools.commons.extensions.setTextSize
+import com.simplemobiletools.commons.extensions.*
 import org.joda.time.DateTime
 
 class MyWidgetListProvider : AppWidgetProvider() {
@@ -40,12 +36,10 @@ class MyWidgetListProvider : AppWidgetProvider() {
                 setTextSize(R.id.widget_event_list_empty, fontSize)
 
                 setTextColor(R.id.widget_event_list_today, textColor)
-                setTextSize(R.id.widget_event_list_today, fontSize + 3)
+                setTextSize(R.id.widget_event_list_today, fontSize)
             }
 
-            val now = (System.currentTimeMillis() / 1000).toInt()
-            val todayCode = Formatter.getDayCodeFromTS(now)
-            val todayText = Formatter.getDayTitle(context, todayCode)
+            val todayText = Formatter.getLongestDate(getNowSeconds())
             views.setText(R.id.widget_event_list_today, todayText)
 
             views.setImageViewBitmap(R.id.widget_event_new_event, context.resources.getColoredBitmap(R.drawable.ic_plus, textColor))
@@ -57,7 +51,7 @@ class MyWidgetListProvider : AppWidgetProvider() {
                 views.setRemoteAdapter(R.id.widget_event_list, this)
             }
 
-            val startActivityIntent = Intent(context, SplashActivity::class.java)
+            val startActivityIntent = context.getLaunchIntent() ?: Intent(context, SplashActivity::class.java)
             val startActivityPendingIntent = PendingIntent.getActivity(context, 0, startActivityIntent, PendingIntent.FLAG_UPDATE_CURRENT)
             views.setPendingIntentTemplate(R.id.widget_event_list, startActivityPendingIntent)
             views.setEmptyView(R.id.widget_event_list, R.id.widget_event_list_empty)
@@ -86,7 +80,7 @@ class MyWidgetListProvider : AppWidgetProvider() {
     }
 
     private fun launchDayActivity(context: Context) {
-        Intent(context, DayActivity::class.java).apply {
+        (context.getLaunchIntent() ?: Intent(context, SplashActivity::class.java)).apply {
             putExtra(DAY_CODE, Formatter.getDayCodeFromDateTime(DateTime()))
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(this)

@@ -1,11 +1,14 @@
 package com.simplemobiletools.calendar.helpers
 
 import android.content.Context
-import android.media.RingtoneManager
-import android.text.format.DateFormat
+import android.media.AudioManager
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.extensions.scheduleCalDAVSync
+import com.simplemobiletools.commons.extensions.getDefaultAlarmTitle
+import com.simplemobiletools.commons.extensions.getDefaultAlarmUri
+import com.simplemobiletools.commons.helpers.ALARM_SOUND_TYPE_NOTIFICATION
 import com.simplemobiletools.commons.helpers.BaseConfig
+import com.simplemobiletools.commons.helpers.DAY_MINUTES
 import java.util.*
 
 class Config(context: Context) : BaseConfig(context) {
@@ -13,23 +16,9 @@ class Config(context: Context) : BaseConfig(context) {
         fun newInstance(context: Context) = Config(context)
     }
 
-    var isSundayFirst: Boolean
-        get() {
-            val isSundayFirst = Calendar.getInstance(Locale.getDefault()).firstDayOfWeek == Calendar.SUNDAY
-            return prefs.getBoolean(SUNDAY_FIRST, isSundayFirst)
-        }
-        set(sundayFirst) = prefs.edit().putBoolean(SUNDAY_FIRST, sundayFirst).apply()
-
-    var use24hourFormat: Boolean
-        get() {
-            val use24hourFormat = DateFormat.is24HourFormat(context)
-            return prefs.getBoolean(USE_24_HOUR_FORMAT, use24hourFormat)
-        }
-        set(use24hourFormat) = prefs.edit().putBoolean(USE_24_HOUR_FORMAT, use24hourFormat).apply()
-
-    var displayWeekNumbers: Boolean
+    var showWeekNumbers: Boolean
         get() = prefs.getBoolean(WEEK_NUMBERS, false)
-        set(displayWeekNumbers) = prefs.edit().putBoolean(WEEK_NUMBERS, displayWeekNumbers).apply()
+        set(showWeekNumbers) = prefs.edit().putBoolean(WEEK_NUMBERS, showWeekNumbers).apply()
 
     var startWeeklyAt: Int
         get() = prefs.getInt(START_WEEKLY_AT, 7)
@@ -43,24 +32,40 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(VIBRATE, false)
         set(vibrate) = prefs.edit().putBoolean(VIBRATE, vibrate).apply()
 
-    var reminderSound: String
-        get() = prefs.getString(REMINDER_SOUND, getDefaultNotificationSound())
-        set(path) = prefs.edit().putString(REMINDER_SOUND, path).apply()
+    var reminderSoundUri: String
+        get() = prefs.getString(REMINDER_SOUND_URI, context.getDefaultAlarmUri(ALARM_SOUND_TYPE_NOTIFICATION).toString())
+        set(reminderSoundUri) = prefs.edit().putString(REMINDER_SOUND_URI, reminderSoundUri).apply()
+
+    var reminderSoundTitle: String
+        get() = prefs.getString(REMINDER_SOUND_TITLE, context.getDefaultAlarmTitle(ALARM_SOUND_TYPE_NOTIFICATION))
+        set(reminderSoundTitle) = prefs.edit().putString(REMINDER_SOUND_TITLE, reminderSoundTitle).apply()
+
+    var lastSoundUri: String
+        get() = prefs.getString(LAST_SOUND_URI, "")
+        set(lastSoundUri) = prefs.edit().putString(LAST_SOUND_URI, lastSoundUri).apply()
+
+    var lastReminderChannel: Long
+        get() = prefs.getLong(LAST_REMINDER_CHANNEL_ID, 0L)
+        set(lastReminderChannel) = prefs.edit().putLong(LAST_REMINDER_CHANNEL_ID, lastReminderChannel).apply()
 
     var storedView: Int
         get() = prefs.getInt(VIEW, MONTHLY_VIEW)
         set(view) = prefs.edit().putInt(VIEW, view).apply()
 
-    var defaultReminderMinutes: Int
-        get() = prefs.getInt(REMINDER_MINUTES, 10)
-        set(mins) = prefs.edit().putInt(REMINDER_MINUTES, mins).apply()
+    var lastEventReminderMinutes: Int
+        get() = prefs.getInt(LAST_EVENT_REMINDER_MINUTES, 10)
+        set(lastEventReminderMinutes) = prefs.edit().putInt(LAST_EVENT_REMINDER_MINUTES, lastEventReminderMinutes).apply()
 
-    var snoozeDelay: Int
-        get() = prefs.getInt(SNOOZE_DELAY, 10)
-        set(snoozeDelay) = prefs.edit().putInt(SNOOZE_DELAY, snoozeDelay).apply()
+    var lastEventReminderMinutes2: Int
+        get() = prefs.getInt(LAST_EVENT_REMINDER_MINUTES_2, REMINDER_OFF)
+        set(lastEventReminderMinutes2) = prefs.edit().putInt(LAST_EVENT_REMINDER_MINUTES_2, lastEventReminderMinutes2).apply()
+
+    var lastEventReminderMinutes3: Int
+        get() = prefs.getInt(LAST_EVENT_REMINDER_MINUTES_3, REMINDER_OFF)
+        set(lastEventReminderMinutes3) = prefs.edit().putInt(LAST_EVENT_REMINDER_MINUTES_3, lastEventReminderMinutes3).apply()
 
     var displayPastEvents: Int
-        get() = prefs.getInt(DISPLAY_PAST_EVENTS, 0)
+        get() = prefs.getInt(DISPLAY_PAST_EVENTS, DAY_MINUTES)
         set(displayPastEvents) = prefs.edit().putInt(DISPLAY_PAST_EVENTS, displayPastEvents).apply()
 
     var displayEventTypes: Set<String>
@@ -70,10 +75,6 @@ class Config(context: Context) : BaseConfig(context) {
     var fontSize: Int
         get() = prefs.getInt(FONT_SIZE, FONT_SIZE_MEDIUM)
         set(size) = prefs.edit().putInt(FONT_SIZE, size).apply()
-
-    var googleSync: Boolean
-        get() = prefs.getBoolean(GOOGLE_SYNC, false)
-        set(googleSync) = prefs.edit().putBoolean(GOOGLE_SYNC, googleSync).apply()
 
     var caldavSync: Boolean
         get() = prefs.getBoolean(CALDAV_SYNC, false)
@@ -86,13 +87,33 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getString(CALDAV_SYNCED_CALENDAR_IDS, "")
         set(calendarIDs) = prefs.edit().putString(CALDAV_SYNCED_CALENDAR_IDS, calendarIDs).apply()
 
-    var lastUsedCaldavCalendar: Int
+    var lastUsedCaldavCalendarId: Int
         get() = prefs.getInt(LAST_USED_CALDAV_CALENDAR, getSyncedCalendarIdsAsList().first().toInt())
         set(calendarId) = prefs.edit().putInt(LAST_USED_CALDAV_CALENDAR, calendarId).apply()
+
+    var lastUsedLocalEventTypeId: Int
+        get() = prefs.getInt(LAST_USED_LOCAL_EVENT_TYPE_ID, DBHelper.REGULAR_EVENT_TYPE_ID)
+        set(lastUsedLocalEventTypeId) = prefs.edit().putInt(LAST_USED_LOCAL_EVENT_TYPE_ID, lastUsedLocalEventTypeId).apply()
+
+    var reminderAudioStream: Int
+        get() = prefs.getInt(REMINDER_AUDIO_STREAM, AudioManager.STREAM_ALARM)
+        set(reminderAudioStream) = prefs.edit().putInt(REMINDER_AUDIO_STREAM, reminderAudioStream).apply()
 
     var replaceDescription: Boolean
         get() = prefs.getBoolean(REPLACE_DESCRIPTION, false)
         set(replaceDescription) = prefs.edit().putBoolean(REPLACE_DESCRIPTION, replaceDescription).apply()
+
+    var showGrid: Boolean
+        get() = prefs.getBoolean(SHOW_GRID, false)
+        set(showGrid) = prefs.edit().putBoolean(SHOW_GRID, showGrid).apply()
+
+    var loopReminders: Boolean
+        get() = prefs.getBoolean(LOOP_REMINDERS, false)
+        set(loopReminders) = prefs.edit().putBoolean(LOOP_REMINDERS, loopReminders).apply()
+
+    var dimPastEvents: Boolean
+        get() = prefs.getBoolean(DIM_PAST_EVENTS, true)
+        set(dimPastEvents) = prefs.edit().putBoolean(DIM_PAST_EVENTS, dimPastEvents).apply()
 
     fun getSyncedCalendarIdsAsList() = caldavSyncedCalendarIDs.split(",").filter { it.trim().isNotEmpty() } as ArrayList<String>
 
@@ -112,14 +133,6 @@ class Config(context: Context) : BaseConfig(context) {
         displayEventTypes = currDisplayEventTypes
     }
 
-    private fun getDefaultNotificationSound(): String {
-        return try {
-            RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_NOTIFICATION)?.toString() ?: ""
-        } catch (e: Exception) {
-            ""
-        }
-    }
-
     fun getFontSize() = when (fontSize) {
         FONT_SIZE_SMALL -> getSmallFontSize()
         FONT_SIZE_MEDIUM -> getMediumFontSize()
@@ -129,4 +142,20 @@ class Config(context: Context) : BaseConfig(context) {
     private fun getSmallFontSize() = getMediumFontSize() - 3f
     private fun getMediumFontSize() = context.resources.getDimension(R.dimen.day_text_size) / context.resources.displayMetrics.density
     private fun getLargeFontSize() = getMediumFontSize() + 3f
+
+    var usePreviousEventReminders: Boolean
+        get() = prefs.getBoolean(USE_PREVIOUS_EVENT_REMINDERS, true)
+        set(usePreviousEventReminders) = prefs.edit().putBoolean(USE_PREVIOUS_EVENT_REMINDERS, usePreviousEventReminders).apply()
+
+    var defaultReminder1: Int
+        get() = prefs.getInt(DEFAULT_REMINDER_1, 10)
+        set(defaultReminder1) = prefs.edit().putInt(DEFAULT_REMINDER_1, defaultReminder1).apply()
+
+    var defaultReminder2: Int
+        get() = prefs.getInt(DEFAULT_REMINDER_2, REMINDER_OFF)
+        set(defaultReminder2) = prefs.edit().putInt(DEFAULT_REMINDER_2, defaultReminder2).apply()
+
+    var defaultReminder3: Int
+        get() = prefs.getInt(DEFAULT_REMINDER_3, REMINDER_OFF)
+        set(defaultReminder3) = prefs.edit().putInt(DEFAULT_REMINDER_3, defaultReminder3).apply()
 }

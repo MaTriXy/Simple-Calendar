@@ -7,31 +7,41 @@ import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.dialogs.DeleteEventDialog
 import com.simplemobiletools.calendar.extensions.config
+import com.simplemobiletools.calendar.extensions.dbHelper
+import com.simplemobiletools.calendar.extensions.handleEventDeleting
 import com.simplemobiletools.calendar.extensions.shareEvents
 import com.simplemobiletools.calendar.helpers.Formatter
-import com.simplemobiletools.calendar.interfaces.DeleteEventsListener
+import com.simplemobiletools.calendar.helpers.ITEM_EVENT
+import com.simplemobiletools.calendar.helpers.ITEM_EVENT_SIMPLE
+import com.simplemobiletools.calendar.helpers.LOW_ALPHA
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.commons.adapters.MyRecyclerViewAdapter
+import com.simplemobiletools.commons.extensions.adjustAlpha
 import com.simplemobiletools.commons.extensions.applyColorFilter
 import com.simplemobiletools.commons.extensions.beInvisible
 import com.simplemobiletools.commons.extensions.beInvisibleIf
 import com.simplemobiletools.commons.views.MyRecyclerView
 import kotlinx.android.synthetic.main.event_item_day_view.view.*
 
-class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, val listener: DeleteEventsListener?, recyclerView: MyRecyclerView,
-                       itemClick: (Any) -> Unit) : MyRecyclerViewAdapter(activity, recyclerView, itemClick) {
+class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, recyclerView: MyRecyclerView, itemClick: (Any) -> Unit)
+    : MyRecyclerViewAdapter(activity, recyclerView, null, itemClick) {
 
-    private var allDayString = resources.getString(R.string.all_day)
-    private var replaceDescriptionWithLocation = activity.config.replaceDescription
+    private val allDayString = resources.getString(R.string.all_day)
+    private val replaceDescriptionWithLocation = activity.config.replaceDescription
+    private val dimPastEvents = activity.config.dimPastEvents
+
+    init {
+        setupDragListener(true)
+    }
 
     override fun getActionMenuId() = R.menu.cab_day
 
     override fun prepareActionMode(menu: Menu) {}
 
-    override fun prepareItemSelection(view: View) {}
+    override fun prepareItemSelection(viewHolder: ViewHolder) {}
 
-    override fun markItemSelection(select: Boolean, view: View?) {
-        view?.event_item_frame?.isSelected = select
+    override fun markViewHolderSelection(select: Boolean, viewHolder: ViewHolder?) {
+        viewHolder?.itemView?.event_item_frame?.isSelected = select
     }
 
     override fun actionItemPressed(id: Int) {
@@ -43,11 +53,19 @@ class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, v
 
     override fun getSelectableItemCount() = events.size
 
-    override fun onCreateViewHolder(parent: ViewGroup?, viewType: Int) = createViewHolder(R.layout.event_item_day_view, parent)
+    override fun getIsItemSelectable(position: Int) = true
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MyRecyclerViewAdapter.ViewHolder {
+        val layoutId = when (viewType) {
+            ITEM_EVENT -> R.layout.event_item_day_view
+            else -> R.layout.event_item_day_view_simple
+        }
+        return createViewHolder(layoutId, parent)
+    }
 
     override fun onBindViewHolder(holder: MyRecyclerViewAdapter.ViewHolder, position: Int) {
         val event = events[position]
-        val view = holder.bindView(event) { itemView, layoutPosition ->
+        val view = holder.bindView(event, true, true) { itemView, layoutPosition ->
             setupView(itemView, event)
         }
         bindViewHolder(holder, position, view)
@@ -55,13 +73,23 @@ class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, v
 
     override fun getItemCount() = events.size
 
+    override fun getItemViewType(position: Int): Int {
+        val event = events[position]
+        val detailField = if (replaceDescriptionWithLocation) event.location else event.description
+        return if (event.startTS == event.endTS && detailField.isEmpty()) {
+            ITEM_EVENT_SIMPLE
+        } else {
+            ITEM_EVENT
+        }
+    }
+
     private fun setupView(view: View, event: Event) {
         view.apply {
-            event_section_title.text = event.title
-            event_item_description.text = if (replaceDescriptionWithLocation) event.location else event.description
+            event_item_title.text = event.title
+            event_item_description?.text = if (replaceDescriptionWithLocation) event.location else event.description
             event_item_start.text = if (event.getIsAllDay()) allDayString else Formatter.getTimeFromTS(context, event.startTS)
-            event_item_end.beInvisibleIf(event.startTS == event.endTS)
-            event_item_color.applyColorFilter(event.color)
+            event_item_end?.beInvisibleIf(event.startTS == event.endTS)
+            event_item_color_bar.background.applyColorFilter(event.color)
 
             if (event.startTS != event.endTS) {
                 val startCode = Formatter.getDayCodeFromTS(event.startTS)
@@ -81,10 +109,15 @@ class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, v
                 }
             }
 
-            event_item_start.setTextColor(textColor)
-            event_item_end.setTextColor(textColor)
-            event_section_title.setTextColor(textColor)
-            event_item_description.setTextColor(textColor)
+            var newTextColor = textColor
+            if (dimPastEvents && event.isPastEvent) {
+                newTextColor = newTextColor.adjustAlpha(LOW_ALPHA)
+            }
+
+            event_item_start.setTextColor(newTextColor)
+            event_item_end?.setTextColor(newTextColor)
+            event_item_title.setTextColor(newTextColor)
+            event_item_description?.setTextColor(newTextColor)
         }
     }
 
@@ -99,24 +132,23 @@ class DayEventsAdapter(activity: SimpleActivity, val events: ArrayList<Event>, v
     private fun askConfirmDelete() {
         val eventIds = ArrayList<Int>(selectedPositions.size)
         val timestamps = ArrayList<Int>(selectedPositions.size)
+        val eventsToDelete = ArrayList<Event>(selectedPositions.size)
         selectedPositions.forEach {
-            eventIds.add(events[it].id)
-            timestamps.add(events[it].startTS)
+            val event = events[it]
+            eventsToDelete.add(event)
+            eventIds.add(event.id)
+            timestamps.add(event.startTS)
         }
 
-        DeleteEventDialog(activity, eventIds) {
-            val eventsToDelete = ArrayList<Event>(selectedPositions.size)
-            selectedPositions.sortedDescending().forEach {
-                val event = events[it]
-                eventsToDelete.add(event)
-            }
+        val hasRepeatableEvent = eventsToDelete.any { it.repeatInterval > 0 }
+        DeleteEventDialog(activity, eventIds, hasRepeatableEvent) {
             events.removeAll(eventsToDelete)
 
-            if (it) {
-                listener?.deleteItems(eventIds)
-            } else {
-                listener?.addEventRepeatException(eventIds, timestamps)
-            }
+            val nonRepeatingEventIDs = eventsToDelete.filter { it.repeatInterval == 0 }.map { it.id.toString() }.toTypedArray()
+            activity.dbHelper.deleteEvents(nonRepeatingEventIDs, true)
+
+            val repeatingEventIDs = eventsToDelete.filter { it.repeatInterval != 0 }.map { it.id }
+            activity.handleEventDeleting(repeatingEventIDs, timestamps, it)
             removeSelectedItems()
         }
     }

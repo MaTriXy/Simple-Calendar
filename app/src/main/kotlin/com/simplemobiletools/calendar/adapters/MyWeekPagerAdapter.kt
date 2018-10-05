@@ -7,8 +7,9 @@ import android.support.v4.app.FragmentStatePagerAdapter
 import android.util.SparseArray
 import com.simplemobiletools.calendar.fragments.WeekFragment
 import com.simplemobiletools.calendar.helpers.WEEK_START_TIMESTAMP
+import com.simplemobiletools.calendar.interfaces.WeekFragmentListener
 
-class MyWeekPagerAdapter(fm: FragmentManager, val mWeekTimestamps: List<Int>, val mListener: WeekFragment.WeekScrollListener) : FragmentStatePagerAdapter(fm) {
+class MyWeekPagerAdapter(fm: FragmentManager, val mWeekTimestamps: List<Int>, val mListener: WeekFragmentListener) : FragmentStatePagerAdapter(fm) {
     private val mFragments = SparseArray<WeekFragment>()
 
     override fun getCount() = mWeekTimestamps.size
@@ -31,9 +32,9 @@ class MyWeekPagerAdapter(fm: FragmentManager, val mWeekTimestamps: List<Int>, va
         mFragments[pos + 1]?.updateScrollY(y)
     }
 
-    fun refreshEvents(pos: Int) {
+    fun updateCalendars(pos: Int) {
         for (i in -1..1) {
-            mFragments[pos + i]?.updateEvents()
+            mFragments[pos + i]?.updateCalendar()
         }
     }
 }

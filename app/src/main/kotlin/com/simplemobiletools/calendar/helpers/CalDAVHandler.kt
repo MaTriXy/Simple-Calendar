@@ -10,6 +10,7 @@ import android.util.SparseIntArray
 import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.extensions.dbHelper
+import com.simplemobiletools.calendar.extensions.refreshCalDAVCalendars
 import com.simplemobiletools.calendar.extensions.scheduleCalDAVSync
 import com.simplemobiletools.calendar.models.CalDAVCalendar
 import com.simplemobiletools.calendar.models.Event
@@ -22,15 +23,15 @@ import kotlin.collections.ArrayList
 
 class CalDAVHandler(val context: Context) {
     fun refreshCalendars(activity: SimpleActivity? = null, callback: () -> Unit) {
-        val dbHelper = context.dbHelper
-        for (calendar in getCalDAVCalendars(activity, context.config.caldavSyncedCalendarIDs)) {
-            val localEventType = dbHelper.getEventTypeWithCalDAVCalendarId(calendar.id) ?: continue
+        val calDAVCalendars = getCalDAVCalendars(activity, context.config.caldavSyncedCalendarIDs)
+        for (calendar in calDAVCalendars) {
+            val localEventType = context.dbHelper.getEventTypeWithCalDAVCalendarId(calendar.id) ?: continue
             localEventType.apply {
                 title = calendar.displayName
                 caldavDisplayName = calendar.displayName
                 caldavEmail = calendar.accountName
                 color = calendar.color
-                dbHelper.updateLocalEventType(this)
+                context.dbHelper.updateLocalEventType(this)
             }
 
             CalDAVHandler(context).fetchCalDAVCalendarEvents(calendar.id, localEventType.id, activity)
@@ -50,6 +51,7 @@ class CalDAVHandler(val context: Context) {
                 CalendarContract.Calendars._ID,
                 CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
                 CalendarContract.Calendars.ACCOUNT_NAME,
+                CalendarContract.Calendars.ACCOUNT_TYPE,
                 CalendarContract.Calendars.OWNER_ACCOUNT,
                 CalendarContract.Calendars.CALENDAR_COLOR,
                 CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
@@ -63,10 +65,11 @@ class CalDAVHandler(val context: Context) {
                     val id = cursor.getIntValue(CalendarContract.Calendars._ID)
                     val displayName = cursor.getStringValue(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
                     val accountName = cursor.getStringValue(CalendarContract.Calendars.ACCOUNT_NAME)
-                    val ownerName = cursor.getStringValue(CalendarContract.Calendars.OWNER_ACCOUNT)
+                    val accountType = cursor.getStringValue(CalendarContract.Calendars.ACCOUNT_TYPE)
+                    val ownerName = cursor.getStringValue(CalendarContract.Calendars.OWNER_ACCOUNT) ?: ""
                     val color = cursor.getIntValue(CalendarContract.Calendars.CALENDAR_COLOR)
                     val accessLevel = cursor.getIntValue(CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
-                    val calendar = CalDAVCalendar(id, displayName, accountName, ownerName, color, accessLevel)
+                    val calendar = CalDAVCalendar(id, displayName, accountName, accountType, ownerName, color, accessLevel)
                     calendars.add(calendar)
                 } while (cursor.moveToNext())
             }
@@ -184,8 +187,11 @@ class CalDAVHandler(val context: Context) {
             cursor?.close()
         }
 
-        val sortedColors = ArrayList<Int>(colors.size())
+        var sortedColors = ArrayList<Int>(colors.size())
         (0 until colors.size()).mapTo(sortedColors) { colors[it] }
+        if (sortedColors.isNotEmpty()) {
+            sortedColors = sortedColors.distinct() as ArrayList<Int>
+        }
 
         return sortedColors
     }
@@ -195,7 +201,7 @@ class CalDAVHandler(val context: Context) {
         val fetchedEventIds = ArrayList<String>()
         val existingEvents = context.dbHelper.getEventsFromCalDAVCalendar(calendarId)
         existingEvents.forEach {
-            importIdsMap.put(it.importId, it)
+            importIdsMap[it.importId] = it
         }
 
         val uri = CalendarContract.Events.CONTENT_URI
@@ -205,9 +211,12 @@ class CalDAVHandler(val context: Context) {
                 CalendarContract.Events.DESCRIPTION,
                 CalendarContract.Events.DTSTART,
                 CalendarContract.Events.DTEND,
+                CalendarContract.Events.EVENT_TIMEZONE,
                 CalendarContract.Events.DURATION,
                 CalendarContract.Events.ALL_DAY,
                 CalendarContract.Events.RRULE,
+                CalendarContract.Events.ORIGINAL_ID,
+                CalendarContract.Events.ORIGINAL_INSTANCE_TIME,
                 CalendarContract.Events.EVENT_LOCATION)
 
         val selection = "${CalendarContract.Events.CALENDAR_ID} = $calendarId"
@@ -217,13 +226,15 @@ class CalDAVHandler(val context: Context) {
             if (cursor != null && cursor.moveToFirst()) {
                 do {
                     val id = cursor.getLongValue(CalendarContract.Events._ID)
-                    val title = cursor.getStringValue(CalendarContract.Events.TITLE) ?: continue
+                    val title = cursor.getStringValue(CalendarContract.Events.TITLE) ?: ""
                     val description = cursor.getStringValue(CalendarContract.Events.DESCRIPTION) ?: ""
                     val startTS = (cursor.getLongValue(CalendarContract.Events.DTSTART) / 1000).toInt()
                     var endTS = (cursor.getLongValue(CalendarContract.Events.DTEND) / 1000).toInt()
                     val allDay = cursor.getIntValue(CalendarContract.Events.ALL_DAY)
                     val rrule = cursor.getStringValue(CalendarContract.Events.RRULE) ?: ""
                     val location = cursor.getStringValue(CalendarContract.Events.EVENT_LOCATION) ?: ""
+                    val originalId = cursor.getStringValue(CalendarContract.Events.ORIGINAL_ID)
+                    val originalInstanceTime = cursor.getLongValue(CalendarContract.Events.ORIGINAL_INSTANCE_TIME)
                     val reminders = getCalDAVEventReminders(id)
 
                     if (endTS == 0) {
@@ -232,29 +243,52 @@ class CalDAVHandler(val context: Context) {
                     }
 
                     val importId = getCalDAVEventImportId(calendarId, id)
+                    val source = "$CALDAV-$calendarId"
                     val repeatRule = Parser().parseRepeatInterval(rrule, startTS)
-                    val event = Event(0, startTS, endTS, title, description, reminders.getOrElse(0, { -1 }),
-                            reminders.getOrElse(1, { -1 }), reminders.getOrElse(2, { -1 }), repeatRule.repeatInterval,
-                            importId, allDay, repeatRule.repeatLimit, repeatRule.repeatRule, eventTypeId, source = "$CALDAV-$calendarId",
-                            location = location)
+                    val event = Event(0, startTS, endTS, title, description, reminders.getOrElse(0) { -1 },
+                            reminders.getOrElse(1) { -1 }, reminders.getOrElse(2) { -1 }, repeatRule.repeatInterval,
+                            importId, allDay, repeatRule.repeatLimit, repeatRule.repeatRule, eventTypeId, source = source, location = location)
 
-                    if (event.getIsAllDay() && endTS > startTS) {
-                        event.endTS -= DAY
+                    if (event.getIsAllDay()) {
+                        event.startTS = Formatter.getShiftedImportTimestamp(event.startTS)
+                        event.endTS = Formatter.getShiftedImportTimestamp(event.endTS)
+                        if (event.endTS > event.startTS) {
+                            event.endTS -= DAY
+                        }
                     }
 
                     fetchedEventIds.add(importId)
                     if (importIdsMap.containsKey(event.importId)) {
                         val existingEvent = importIdsMap[importId]
                         val originalEventId = existingEvent!!.id
-                        existingEvent.id = 0
-                        if (existingEvent.hashCode() != event.hashCode()) {
+
+                        existingEvent.apply {
+                            this.id = 0
+                            color = 0
+                            ignoreEventOccurrences = ArrayList()
+                            lastUpdated = 0L
+                            offset = ""
+                        }
+
+                        if (existingEvent.hashCode() != event.hashCode() && title.isNotEmpty()) {
                             event.id = originalEventId
-                            context.dbHelper.update(event, false) {
-                            }
+                            context.dbHelper.update(event, false)
                         }
                     } else {
-                        context.dbHelper.insert(event, false) {
-                            importIdsMap.put(event.importId, event)
+                        // if the event is an exception from another events repeat rule, find the original parent event
+                        if (originalInstanceTime != 0L) {
+                            val parentImportId = "$source-$originalId"
+                            val parentEventId = context.dbHelper.getEventIdWithImportId(parentImportId)
+                            if (parentEventId != 0) {
+                                event.parentId = parentEventId
+                                context.dbHelper.addEventRepeatException(parentEventId, (originalInstanceTime / 1000).toInt(), false, event.importId)
+                            }
+                        }
+
+                        if (title.isNotEmpty()) {
+                            context.dbHelper.insert(event, false) {
+                                importIdsMap[event.importId] = event
+                            }
                         }
                     }
                 } while (cursor.moveToNext())
@@ -291,6 +325,7 @@ class CalDAVHandler(val context: Context) {
 
         setupCalDAVEventReminders(event)
         setupCalDAVEventImportId(event)
+        refreshCalDAVCalendar(event)
     }
 
     fun updateCalDAVEvent(event: Event) {
@@ -304,6 +339,7 @@ class CalDAVHandler(val context: Context) {
 
         setupCalDAVEventReminders(event)
         setupCalDAVEventImportId(event)
+        refreshCalDAVCalendar(event)
     }
 
     private fun setupCalDAVEventReminders(event: Event) {
@@ -329,9 +365,16 @@ class CalDAVHandler(val context: Context) {
             put(CalendarContract.Events.DESCRIPTION, event.description)
             put(CalendarContract.Events.DTSTART, event.startTS * 1000L)
             put(CalendarContract.Events.ALL_DAY, if (event.getIsAllDay()) 1 else 0)
-            put(CalendarContract.Events.RRULE, Parser().getRepeatCode(event))
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().toString())
             put(CalendarContract.Events.EVENT_LOCATION, event.location)
+            put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CONFIRMED)
+
+            val repeatRule = Parser().getRepeatCode(event)
+            if (repeatRule.isEmpty()) {
+                putNull(CalendarContract.Events.RRULE)
+            } else {
+                put(CalendarContract.Events.RRULE, repeatRule)
+            }
 
             if (event.getIsAllDay() && event.endTS > event.startTS)
                 event.endTS += DAY
@@ -373,7 +416,26 @@ class CalDAVHandler(val context: Context) {
         try {
             context.contentResolver.delete(contentUri, null, null)
         } catch (ignored: Exception) {
+        }
+        refreshCalDAVCalendar(event)
+    }
 
+    fun insertEventRepeatException(event: Event, occurrenceTS: Int): Long {
+        val uri = CalendarContract.Events.CONTENT_URI
+        val values = fillEventRepeatExceptionValues(event, occurrenceTS)
+        val newUri = context.contentResolver.insert(uri, values)
+        refreshCalDAVCalendar(event)
+        return java.lang.Long.parseLong(newUri.lastPathSegment)
+    }
+
+    private fun fillEventRepeatExceptionValues(event: Event, occurrenceTS: Int): ContentValues {
+        return ContentValues().apply {
+            put(CalendarContract.Events.CALENDAR_ID, event.getCalDAVCalendarId())
+            put(CalendarContract.Events.DTSTART, occurrenceTS)
+            put(CalendarContract.Events.DTEND, occurrenceTS + (event.endTS - event.startTS))
+            put(CalendarContract.Events.ORIGINAL_ID, event.getCalDAVEventId())
+            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().toString())
+            put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, occurrenceTS * 1000L)
         }
     }
 
@@ -403,4 +465,6 @@ class CalDAVHandler(val context: Context) {
     }
 
     private fun getCalDAVEventImportId(calendarId: Int, eventId: Long) = "$CALDAV-$calendarId-$eventId"
+
+    private fun refreshCalDAVCalendar(event: Event) = context.refreshCalDAVCalendars(null, event.getCalDAVCalendarId().toString())
 }

@@ -3,7 +3,10 @@ package com.simplemobiletools.calendar.activities
 import android.annotation.SuppressLint
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.support.v4.app.NotificationManagerCompat
 import android.text.method.LinkMovementMethod
 import android.view.Menu
 import android.view.MenuItem
@@ -15,14 +18,29 @@ import com.simplemobiletools.calendar.helpers.*
 import com.simplemobiletools.calendar.helpers.Formatter
 import com.simplemobiletools.calendar.models.CalDAVCalendar
 import com.simplemobiletools.calendar.models.Event
+import com.simplemobiletools.commons.dialogs.ConfirmationDialog
 import com.simplemobiletools.commons.dialogs.RadioGroupDialog
 import com.simplemobiletools.commons.extensions.*
+import com.simplemobiletools.commons.helpers.*
 import com.simplemobiletools.commons.models.RadioItem
 import kotlinx.android.synthetic.main.activity_event.*
 import org.joda.time.DateTime
 import java.util.*
+import java.util.regex.Pattern
 
 class EventActivity : SimpleActivity() {
+    private val LAT_LON_PATTERN = "^[-+]?([1-8]?\\d(\\.\\d+)?|90(\\.0+)?)([,;])\\s*[-+]?(180(\\.0+)?|((1[0-7]\\d)|([1-9]?\\d))(\\.\\d+)?)\$"
+    private val START_TS = "START_TS"
+    private val END_TS = "END_TS"
+    private val REMINDER_1_MINUTES = "REMINDER_1_MINUTES"
+    private val REMINDER_2_MINUTES = "REMINDER_2_MINUTES"
+    private val REMINDER_3_MINUTES = "REMINDER_3_MINUTES"
+    private val REPEAT_INTERVAL = "REPEAT_INTERVAL"
+    private val REPEAT_LIMIT = "REPEAT_LIMIT"
+    private val REPEAT_RULE = "REPEAT_RULE"
+    private val EVENT_TYPE_ID = "EVENT_TYPE_ID"
+    private val EVENT_CALENDAR_ID = "EVENT_CALENDAR_ID"
+
     private var mReminder1Minutes = 0
     private var mReminder2Minutes = 0
     private var mReminder3Minutes = 0
@@ -45,7 +63,7 @@ class EventActivity : SimpleActivity() {
 
         supportActionBar?.setHomeAsUpIndicator(R.drawable.ic_cross)
         val intent = intent ?: return
-        mDialogTheme = getAppropriateTheme()
+        mDialogTheme = getDialogTheme()
 
         val eventId = intent.getIntExtra(EVENT_ID, 0)
         val event = dbHelper.getEventWithId(eventId)
@@ -55,31 +73,43 @@ class EventActivity : SimpleActivity() {
             return
         }
 
+        val localEventType = dbHelper.getEventType(config.lastUsedLocalEventTypeId)
+        if (localEventType == null || localEventType.caldavCalendarId != 0) {
+            config.lastUsedLocalEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
+        }
+
+        mEventTypeId = config.lastUsedLocalEventTypeId
+
         if (event != null) {
             mEvent = event
             mEventOccurrenceTS = intent.getIntExtra(EVENT_OCCURRENCE_TS, 0)
-            setupEditEvent()
-        } else {
-            mEvent = Event()
-            mReminder1Minutes = config.defaultReminderMinutes
-            mReminder2Minutes = -1
-            mReminder3Minutes = -1
-            val startTS = intent.getIntExtra(NEW_EVENT_START_TS, 0)
-            if (startTS == 0) {
-                return
+            if (savedInstanceState == null) {
+                setupEditEvent()
             }
 
-            setupNewEvent(Formatter.getDateTimeFromTS(startTS))
+            if (intent.getBooleanExtra(IS_DUPLICATE_INTENT, false)) {
+                mEvent.id = 0
+            }
+
+            cancelNotification(mEvent.id)
+        } else {
+            mEvent = Event()
+            mReminder1Minutes = if (config.usePreviousEventReminders) config.lastEventReminderMinutes else config.defaultReminder1
+            mReminder2Minutes = if (config.usePreviousEventReminders) config.lastEventReminderMinutes2 else config.defaultReminder2
+            mReminder3Minutes = if (config.usePreviousEventReminders) config.lastEventReminderMinutes3 else config.defaultReminder3
+
+            if (savedInstanceState == null) {
+                setupNewEvent()
+            }
         }
 
-        checkReminderTexts()
-        updateRepetitionText()
-        updateStartTexts()
-        updateEndTexts()
-        updateEventType()
-        updateCalDAVCalendar()
-        updateLocation()
+        if (savedInstanceState == null) {
+            updateTexts()
+            updateEventType()
+            updateCalDAVCalendar()
+        }
 
+        event_show_on_map.setOnClickListener { showOnMap() }
         event_start_date.setOnClickListener { setupStartDate() }
         event_start_time.setOnClickListener { setupStartTime() }
         event_end_date.setOnClickListener { setupEndDate() }
@@ -90,7 +120,19 @@ class EventActivity : SimpleActivity() {
         event_repetition_rule_holder.setOnClickListener { showRepetitionRuleDialog() }
         event_repetition_limit_holder.setOnClickListener { showRepetitionTypePicker() }
 
-        event_reminder_1.setOnClickListener { showReminder1Dialog() }
+        event_reminder_1.setOnClickListener {
+            handleNotificationAvailability() {
+                if (config.wasAlarmWarningShown) {
+                    showReminder1Dialog()
+                } else {
+                    ConfirmationDialog(this, messageId = R.string.reminder_warning, positive = R.string.ok, negative = 0) {
+                        config.wasAlarmWarningShown = true
+                        showReminder1Dialog()
+                    }
+                }
+            }
+        }
+
         event_reminder_2.setOnClickListener { showReminder2Dialog() }
         event_reminder_3.setOnClickListener { showReminder3Dialog() }
 
@@ -104,17 +146,89 @@ class EventActivity : SimpleActivity() {
         wasActivityInitialized = true
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_event, menu)
+        if (wasActivityInitialized) {
+            menu.findItem(R.id.delete).isVisible = mEvent.id != 0
+            menu.findItem(R.id.share).isVisible = mEvent.id != 0
+            menu.findItem(R.id.duplicate).isVisible = mEvent.id != 0
+        }
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.save -> saveEvent()
+            R.id.delete -> deleteEvent()
+            R.id.duplicate -> duplicateEvent()
+            R.id.share -> shareEvent()
+            else -> return super.onOptionsItemSelected(item)
+        }
+        return true
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(START_TS, mEventStartDateTime.seconds())
+        outState.putInt(END_TS, mEventEndDateTime.seconds())
+
+        outState.putInt(REMINDER_1_MINUTES, mReminder1Minutes)
+        outState.putInt(REMINDER_2_MINUTES, mReminder2Minutes)
+        outState.putInt(REMINDER_3_MINUTES, mReminder3Minutes)
+
+        outState.putInt(REPEAT_INTERVAL, mRepeatInterval)
+        outState.putInt(REPEAT_LIMIT, mRepeatLimit)
+        outState.putInt(REPEAT_RULE, mRepeatRule)
+
+        outState.putInt(EVENT_TYPE_ID, mEventTypeId)
+        outState.putInt(EVENT_CALENDAR_ID, mEventCalendarId)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        savedInstanceState.apply {
+            mEventStartDateTime = Formatter.getDateTimeFromTS(getInt(START_TS))
+            mEventEndDateTime = Formatter.getDateTimeFromTS(getInt(END_TS))
+
+            mReminder1Minutes = getInt(REMINDER_1_MINUTES)
+            mReminder2Minutes = getInt(REMINDER_2_MINUTES)
+            mReminder3Minutes = getInt(REMINDER_3_MINUTES)
+
+            mRepeatInterval = getInt(REPEAT_INTERVAL)
+            mRepeatLimit = getInt(REPEAT_LIMIT)
+            mRepeatRule = getInt(REPEAT_RULE)
+
+            mEventTypeId = getInt(EVENT_TYPE_ID)
+            mEventCalendarId = getInt(EVENT_CALENDAR_ID)
+        }
+
+        checkRepeatTexts(mRepeatInterval)
+        checkRepeatRule()
+        updateTexts()
+        updateEventType()
+        updateCalDAVCalendar()
+    }
+
+    private fun updateTexts() {
+        updateRepetitionText()
+        checkReminderTexts()
+        updateStartTexts()
+        updateEndTexts()
+    }
+
     private fun setupEditEvent() {
         val realStart = if (mEventOccurrenceTS == 0) mEvent.startTS else mEventOccurrenceTS
         val duration = mEvent.endTS - mEvent.startTS
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
-        supportActionBar?.title = resources.getString(R.string.edit_event)
+        updateActionBarTitle(getString(R.string.edit_event))
         mEventStartDateTime = Formatter.getDateTimeFromTS(realStart)
         mEventEndDateTime = Formatter.getDateTimeFromTS(realStart + duration)
         event_title.setText(mEvent.title)
         event_location.setText(mEvent.location)
         event_description.setText(mEvent.description)
-        event_description.movementMethod = LinkMovementMethod.getInstance()
+        if (event_description.value.isNotEmpty()) {
+            event_description.movementMethod = LinkMovementMethod.getInstance()
+        }
 
         mReminder1Minutes = mEvent.reminder1Minutes
         mReminder2Minutes = mEvent.reminder2Minutes
@@ -127,35 +241,62 @@ class EventActivity : SimpleActivity() {
         checkRepeatTexts(mRepeatInterval)
     }
 
-    private fun setupNewEvent(dateTime: DateTime) {
+    private fun setupNewEvent() {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
-        supportActionBar?.title = resources.getString(R.string.new_event)
-        mEventStartDateTime = dateTime
+        updateActionBarTitle(getString(R.string.new_event))
+        val isLastCaldavCalendarOK = config.caldavSync && config.getSyncedCalendarIdsAsList().contains(config.lastUsedCaldavCalendarId.toString())
+        mEventCalendarId = if (isLastCaldavCalendarOK) config.lastUsedCaldavCalendarId else STORED_LOCALLY_ONLY
 
-        val addHours = if (intent.getBooleanExtra(NEW_EVENT_SET_HOUR_DURATION, false)) 1 else 0
-        mEventEndDateTime = mEventStartDateTime.plusHours(addHours)
+        if (intent.action == Intent.ACTION_EDIT || intent.action == Intent.ACTION_INSERT) {
+            val startTS = (intent.getLongExtra("beginTime", System.currentTimeMillis()) / 1000).toInt()
+            mEventStartDateTime = Formatter.getDateTimeFromTS(startTS)
 
-        val isLastCaldavCalendarOK = config.caldavSync && config.getSyncedCalendarIdsAsList().contains(config.lastUsedCaldavCalendar.toString())
-        mEventCalendarId = if (isLastCaldavCalendarOK) config.lastUsedCaldavCalendar else STORED_LOCALLY_ONLY
+            val endTS = (intent.getLongExtra("endTime", System.currentTimeMillis()) / 1000).toInt()
+            mEventEndDateTime = Formatter.getDateTimeFromTS(endTS)
+
+            event_title.setText(intent.getStringExtra("title"))
+            event_location.setText(intent.getStringExtra("eventLocation"))
+            event_description.setText(intent.getStringExtra("description"))
+            if (event_description.value.isNotEmpty()) {
+                event_description.movementMethod = LinkMovementMethod.getInstance()
+            }
+        } else {
+            val startTS = intent.getIntExtra(NEW_EVENT_START_TS, 0)
+            val dateTime = Formatter.getDateTimeFromTS(startTS)
+            mEventStartDateTime = dateTime
+
+            val addHours = if (intent.getBooleanExtra(NEW_EVENT_SET_HOUR_DURATION, false)) 1 else 0
+            mEventEndDateTime = mEventStartDateTime.plusHours(addHours)
+        }
+    }
+
+    private fun handleNotificationAvailability(callback: () -> Unit) {
+        if (NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) {
+            callback()
+        } else {
+            ConfirmationDialog(this, messageId = R.string.notifications_disabled, positive = R.string.ok, negative = 0) {
+                callback()
+            }
+        }
     }
 
     private fun showReminder1Dialog() {
-        showEventReminderDialog(mReminder1Minutes) {
-            mReminder1Minutes = it
+        showPickSecondsDialogHelper(mReminder1Minutes) {
+            mReminder1Minutes = if (it <= 0) it else it / 60
             checkReminderTexts()
         }
     }
 
     private fun showReminder2Dialog() {
-        showEventReminderDialog(mReminder2Minutes) {
-            mReminder2Minutes = it
+        showPickSecondsDialogHelper(mReminder2Minutes) {
+            mReminder2Minutes = if (it <= 0) it else it / 60
             checkReminderTexts()
         }
     }
 
     private fun showReminder3Dialog() {
-        showEventReminderDialog(mReminder3Minutes) {
-            mReminder3Minutes = it
+        showPickSecondsDialogHelper(mReminder3Minutes) {
+            mReminder3Minutes = if (it <= 0) it else it / 60
             checkReminderTexts()
         }
     }
@@ -171,10 +312,10 @@ class EventActivity : SimpleActivity() {
         updateRepetitionText()
         checkRepeatTexts(interval)
 
-        if (mRepeatInterval.isXWeeklyRepetition()) {
-            setRepeatRule(Math.pow(2.0, (mEventStartDateTime.dayOfWeek - 1).toDouble()).toInt())
-        } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            setRepeatRule(REPEAT_MONTH_SAME_DAY)
+        when {
+            mRepeatInterval.isXWeeklyRepetition() -> setRepeatRule(Math.pow(2.0, (mEventStartDateTime.dayOfWeek - 1).toDouble()).toInt())
+            mRepeatInterval.isXMonthlyRepetition() -> setRepeatRule(REPEAT_SAME_DAY)
+            mRepeatInterval.isXYearlyRepetition() -> setRepeatRule(REPEAT_SAME_DAY)
         }
     }
 
@@ -182,7 +323,7 @@ class EventActivity : SimpleActivity() {
         event_repetition_limit_holder.beGoneIf(limit == 0)
         checkRepetitionLimitText()
 
-        event_repetition_rule_holder.beVisibleIf(mRepeatInterval.isXWeeklyRepetition() || mRepeatInterval.isXMonthlyRepetition())
+        event_repetition_rule_holder.beVisibleIf(mRepeatInterval.isXWeeklyRepetition() || mRepeatInterval.isXMonthlyRepetition() || mRepeatInterval.isXYearlyRepetition())
         checkRepetitionRuleText()
     }
 
@@ -218,34 +359,63 @@ class EventActivity : SimpleActivity() {
 
     private fun showRepetitionRuleDialog() {
         hideKeyboard()
-        if (mRepeatInterval.isXWeeklyRepetition()) {
-            RepeatRuleWeeklyDialog(this, mRepeatRule) {
+        when {
+            mRepeatInterval.isXWeeklyRepetition() -> RepeatRuleWeeklyDialog(this, mRepeatRule) {
                 setRepeatRule(it)
             }
-        } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            val items = arrayListOf(RadioItem(REPEAT_MONTH_SAME_DAY, getString(R.string.repeat_on_the_same_day)))
-
-            // split Every Last Sunday and Every Fourth Sunday of the month, if the month has 4 sundays
-            if (isLastWeekDayOfMonth()) {
-                val order = (mEventStartDateTime.dayOfMonth - 1) / 7 + 1
-                if (order == 4) {
-                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY)))
-                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST)))
-                } else if (order == 5) {
-                    items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST)))
+            mRepeatInterval.isXMonthlyRepetition() -> {
+                val items = getAvailableMonthlyRepetitionRules()
+                RadioGroupDialog(this, items, mRepeatRule) {
+                    setRepeatRule(it as Int)
                 }
-            } else {
-                items.add(RadioItem(REPEAT_MONTH_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_MONTH_ORDER_WEEKDAY)))
             }
-
-            if (isLastDayOfTheMonth()) {
-                items.add(RadioItem(REPEAT_MONTH_LAST_DAY, getString(R.string.repeat_on_the_last_day)))
-            }
-
-            RadioGroupDialog(this, items, mRepeatRule) {
-                setRepeatRule(it as Int)
+            mRepeatInterval.isXYearlyRepetition() -> {
+                val items = getAvailableYearlyRepetitionRules()
+                RadioGroupDialog(this, items, mRepeatRule) {
+                    setRepeatRule(it as Int)
+                }
             }
         }
+    }
+
+    private fun getAvailableMonthlyRepetitionRules(): ArrayList<RadioItem> {
+        val items = arrayListOf(RadioItem(REPEAT_SAME_DAY, getString(R.string.repeat_on_the_same_day_monthly)))
+
+        // split Every Last Sunday and Every Fourth Sunday of the month, if the month has 4 sundays
+        if (isLastWeekDayOfMonth()) {
+            val order = (mEventStartDateTime.dayOfMonth - 1) / 7 + 1
+            if (order == 4) {
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_ORDER_WEEKDAY)))
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_ORDER_WEEKDAY_USE_LAST)))
+            } else if (order == 5) {
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayString(true, REPEAT_ORDER_WEEKDAY_USE_LAST)))
+            }
+        } else {
+            items.add(RadioItem(REPEAT_ORDER_WEEKDAY, getRepeatXthDayString(true, REPEAT_ORDER_WEEKDAY)))
+        }
+
+        if (isLastDayOfTheMonth()) {
+            items.add(RadioItem(REPEAT_LAST_DAY, getString(R.string.repeat_on_the_last_day_monthly)))
+        }
+        return items
+    }
+
+    private fun getAvailableYearlyRepetitionRules(): ArrayList<RadioItem> {
+        val items = arrayListOf(RadioItem(REPEAT_SAME_DAY, getString(R.string.repeat_on_the_same_day_yearly)))
+
+        if (isLastWeekDayOfMonth()) {
+            val order = (mEventStartDateTime.dayOfMonth - 1) / 7 + 1
+            if (order == 4) {
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY, getRepeatXthDayInMonthString(true, REPEAT_ORDER_WEEKDAY)))
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayInMonthString(true, REPEAT_ORDER_WEEKDAY_USE_LAST)))
+            } else if (order == 5) {
+                items.add(RadioItem(REPEAT_ORDER_WEEKDAY_USE_LAST, getRepeatXthDayInMonthString(true, REPEAT_ORDER_WEEKDAY_USE_LAST)))
+            }
+        } else {
+            items.add(RadioItem(REPEAT_ORDER_WEEKDAY, getRepeatXthDayInMonthString(true, REPEAT_ORDER_WEEKDAY)))
+        }
+
+        return items
     }
 
     private fun isLastDayOfTheMonth() = mEventStartDateTime.dayOfMonth == mEventStartDateTime.dayOfMonth().withMaximumValue().dayOfMonth
@@ -278,7 +448,7 @@ class EventActivity : SimpleActivity() {
     private fun getOrderString(repeatRule: Int): String {
         val dayOfMonth = mEventStartDateTime.dayOfMonth
         var order = (dayOfMonth - 1) / 7 + 1
-        if (order == 4 && isLastWeekDayOfMonth() && repeatRule == REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST) {
+        if (order == 4 && isLastWeekDayOfMonth() && repeatRule == REPEAT_ORDER_WEEKDAY_USE_LAST) {
             order = -1
         }
 
@@ -304,6 +474,12 @@ class EventActivity : SimpleActivity() {
         })
     }
 
+    private fun getRepeatXthDayInMonthString(includeBase: Boolean, repeatRule: Int): String {
+        val weekDayString = getRepeatXthDayString(includeBase, repeatRule)
+        val monthString = resources.getStringArray(R.array.in_months)[mEventStartDateTime.monthOfYear - 1]
+        return "$weekDayString $monthString"
+    }
+
     private fun setRepeatRule(rule: Int) {
         mRepeatRule = rule
         checkRepetitionRuleText()
@@ -313,47 +489,42 @@ class EventActivity : SimpleActivity() {
     }
 
     private fun checkRepetitionRuleText() {
-        if (mRepeatInterval.isXWeeklyRepetition()) {
-            event_repetition_rule.text = if (mRepeatRule == EVERY_DAY) getString(R.string.every_day) else getSelectedDaysString()
-        } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            val repeatString = if (mRepeatRule == REPEAT_MONTH_ORDER_WEEKDAY_USE_LAST || mRepeatRule == REPEAT_MONTH_ORDER_WEEKDAY)
-                R.string.repeat else R.string.repeat_on
+        when {
+            mRepeatInterval.isXWeeklyRepetition() -> {
+                event_repetition_rule.text = if (mRepeatRule == EVERY_DAY_BIT) getString(R.string.every_day) else getSelectedDaysString(mRepeatRule)
+            }
+            mRepeatInterval.isXMonthlyRepetition() -> {
+                val repeatString = if (mRepeatRule == REPEAT_ORDER_WEEKDAY_USE_LAST || mRepeatRule == REPEAT_ORDER_WEEKDAY)
+                    R.string.repeat else R.string.repeat_on
 
-            event_repetition_rule_label.text = getString(repeatString)
-            event_repetition_rule.text = getMonthlyRepetitionRuleText()
+                event_repetition_rule_label.text = getString(repeatString)
+                event_repetition_rule.text = getMonthlyRepetitionRuleText()
+            }
+            mRepeatInterval.isXYearlyRepetition() -> {
+                val repeatString = if (mRepeatRule == REPEAT_ORDER_WEEKDAY_USE_LAST || mRepeatRule == REPEAT_ORDER_WEEKDAY)
+                    R.string.repeat else R.string.repeat_on
+
+                event_repetition_rule_label.text = getString(repeatString)
+                event_repetition_rule.text = getYearlyRepetitionRuleText()
+            }
         }
     }
 
-    private fun getSelectedDaysString(): String {
-        var days = ""
-        if (mRepeatRule and MONDAY != 0)
-            days += "${getString(R.string.monday).substringTo(3)}, "
-        if (mRepeatRule and TUESDAY != 0)
-            days += "${getString(R.string.tuesday).substringTo(3)}, "
-        if (mRepeatRule and WEDNESDAY != 0)
-            days += "${getString(R.string.wednesday).substringTo(3)}, "
-        if (mRepeatRule and THURSDAY != 0)
-            days += "${getString(R.string.thursday).substringTo(3)}, "
-        if (mRepeatRule and FRIDAY != 0)
-            days += "${getString(R.string.friday).substringTo(3)}, "
-        if (mRepeatRule and SATURDAY != 0)
-            days += "${getString(R.string.saturday).substringTo(3)}, "
-        if (mRepeatRule and SUNDAY != 0)
-            days += "${getString(R.string.sunday).substringTo(3)}, "
-
-        return days.trim().trimEnd(',')
+    private fun getMonthlyRepetitionRuleText() = when (mRepeatRule) {
+        REPEAT_SAME_DAY -> getString(R.string.the_same_day)
+        REPEAT_LAST_DAY -> getString(R.string.the_last_day)
+        else -> getRepeatXthDayString(false, mRepeatRule)
     }
 
-    private fun getMonthlyRepetitionRuleText() = when (mRepeatRule) {
-        REPEAT_MONTH_SAME_DAY -> getString(R.string.the_same_day)
-        REPEAT_MONTH_LAST_DAY -> getString(R.string.the_last_day)
-        else -> getRepeatXthDayString(false, mRepeatRule)
+    private fun getYearlyRepetitionRuleText() = when (mRepeatRule) {
+        REPEAT_SAME_DAY -> getString(R.string.the_same_day)
+        else -> getRepeatXthDayInMonthString(false, mRepeatRule)
     }
 
     private fun showEventTypeDialog() {
         hideKeyboard()
-        SelectEventTypeDialog(this, mEventTypeId) {
-            mEventTypeId = it
+        SelectEventTypeDialog(this, mEventTypeId, false) {
+            mEventTypeId = it.id
             updateEventType()
         }
     }
@@ -407,7 +578,7 @@ class EventActivity : SimpleActivity() {
         val eventType = dbHelper.getEventType(mEventTypeId)
         if (eventType != null) {
             event_type.text = eventType.title
-            event_type_color.setBackgroundWithStroke(eventType.color, config.backgroundColor)
+            event_type_color.setFillWithStroke(eventType.color, config.backgroundColor)
         }
     }
 
@@ -417,7 +588,7 @@ class EventActivity : SimpleActivity() {
             event_caldav_calendar_holder.beVisible()
             event_caldav_calendar_divider.beVisible()
 
-            val calendars = CalDAVHandler(applicationContext).getCalDAVCalendars().filter {
+            val calendars = CalDAVHandler(applicationContext).getCalDAVCalendars(this).filter {
                 it.canWrite() && config.getSyncedCalendarIdsAsList().contains(it.id.toString())
             }
             updateCurrentCalendarInfo(if (mEventCalendarId == STORED_LOCALLY_ONLY) null else getCalendarWithId(calendars, getCalendarId()))
@@ -426,11 +597,11 @@ class EventActivity : SimpleActivity() {
                 hideKeyboard()
                 SelectEventCalendarDialog(this, calendars, mEventCalendarId) {
                     if (mEventCalendarId != STORED_LOCALLY_ONLY && it == STORED_LOCALLY_ONLY) {
-                        mEventTypeId = DBHelper.REGULAR_EVENT_TYPE_ID
+                        mEventTypeId = config.lastUsedLocalEventTypeId
                         updateEventType()
                     }
                     mEventCalendarId = it
-                    config.lastUsedCaldavCalendar = it
+                    config.lastUsedCaldavCalendarId = it
                     updateCurrentCalendarInfo(getCalendarWithId(calendars, it))
                 }
             }
@@ -439,7 +610,7 @@ class EventActivity : SimpleActivity() {
         }
     }
 
-    private fun getCalendarId() = if (mEvent.source == SOURCE_SIMPLE_CALENDAR) config.lastUsedCaldavCalendar else mEvent.getCalDAVCalendarId()
+    private fun getCalendarId() = if (mEvent.source == SOURCE_SIMPLE_CALENDAR) config.lastUsedCaldavCalendarId else mEvent.getCalDAVCalendarId()
 
     private fun getCalendarWithId(calendars: List<CalDAVCalendar>, calendarId: Int): CalDAVCalendar? =
             calendars.firstOrNull { it.id == calendarId }
@@ -451,9 +622,15 @@ class EventActivity : SimpleActivity() {
         event_caldav_calendar_email.beGoneIf(currentCalendar == null)
 
         if (currentCalendar == null) {
+            mEventCalendarId = STORED_LOCALLY_ONLY
+            val mediumMargin = resources.getDimension(R.dimen.medium_margin).toInt()
             event_caldav_calendar_name.apply {
                 text = getString(R.string.store_locally_only)
-                setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.medium_margin).toInt())
+                setPadding(paddingLeft, paddingTop, paddingRight, mediumMargin)
+            }
+
+            event_caldav_calendar_holder.apply {
+                setPadding(paddingLeft, mediumMargin, paddingRight, mediumMargin)
             }
         } else {
             event_caldav_calendar_email.text = currentCalendar.accountName
@@ -461,11 +638,11 @@ class EventActivity : SimpleActivity() {
                 text = currentCalendar.displayName
                 setPadding(paddingLeft, paddingTop, paddingRight, resources.getDimension(R.dimen.tiny_margin).toInt())
             }
-        }
-    }
 
-    private fun updateLocation() {
-        event_location.setText(mEvent.location)
+            event_caldav_calendar_holder.apply {
+                setPadding(paddingLeft, 0, paddingRight, 0)
+            }
+        }
     }
 
     private fun toggleAllDay(isChecked: Boolean) {
@@ -474,38 +651,29 @@ class EventActivity : SimpleActivity() {
         event_end_time.beGoneIf(isChecked)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_event, menu)
-        if (wasActivityInitialized) {
-            menu.findItem(R.id.delete).isVisible = mEvent.id != 0
-            menu.findItem(R.id.share).isVisible = mEvent.id != 0
-        }
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.save -> saveEvent()
-            R.id.delete -> deleteEvent()
-            R.id.share -> shareEvent()
-            else -> return super.onOptionsItemSelected(item)
-        }
-        return true
-    }
-
     private fun shareEvent() {
         shareEvents(arrayListOf(mEvent.id))
     }
 
     private fun deleteEvent() {
-        DeleteEventDialog(this, arrayListOf(mEvent.id)) {
-            if (it) {
-                dbHelper.deleteEvents(arrayOf(mEvent.id.toString()), true)
-            } else {
-                dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS)
+        DeleteEventDialog(this, arrayListOf(mEvent.id), mEvent.repeatInterval > 0) {
+            when (it) {
+                DELETE_SELECTED_OCCURRENCE -> dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS, true)
+                DELETE_FUTURE_OCCURRENCES -> dbHelper.addEventRepeatLimit(mEvent.id, mEventOccurrenceTS)
+                DELETE_ALL_OCCURRENCES -> dbHelper.deleteEvents(arrayOf(mEvent.id.toString()), true)
             }
             finish()
         }
+    }
+
+    private fun duplicateEvent() {
+        Intent(this, EventActivity::class.java).apply {
+            putExtra(EVENT_ID, mEvent.id)
+            putExtra(EVENT_OCCURRENCE_TS, mEventOccurrenceTS)
+            putExtra(IS_DUPLICATE_INTENT, true)
+            startActivity(this)
+        }
+        finish()
     }
 
     private fun saveEvent() {
@@ -528,30 +696,43 @@ class EventActivity : SimpleActivity() {
         val oldSource = mEvent.source
         val newImportId = if (mEvent.id != 0) mEvent.importId else UUID.randomUUID().toString().replace("-", "") + System.currentTimeMillis().toString()
 
-        val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
+        val newEventType = if (!config.caldavSync || config.lastUsedCaldavCalendarId == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
             mEventTypeId
         } else {
-            dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendar)?.id ?: DBHelper.REGULAR_EVENT_TYPE_ID
+            dbHelper.getEventTypeWithCalDAVCalendarId(config.lastUsedCaldavCalendarId)?.id ?: config.lastUsedLocalEventTypeId
         }
 
-        val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendar == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
+        val newSource = if (!config.caldavSync || config.lastUsedCaldavCalendarId == 0 || mEventCalendarId == STORED_LOCALLY_ONLY) {
+            config.lastUsedLocalEventTypeId = newEventType
             SOURCE_SIMPLE_CALENDAR
         } else {
-            "$CALDAV-${config.lastUsedCaldavCalendar}"
+            "$CALDAV-$mEventCalendarId"
         }
 
         val reminders = sortedSetOf(mReminder1Minutes, mReminder2Minutes, mReminder3Minutes).filter { it != REMINDER_OFF }
+        val reminder1 = reminders.getOrElse(0) { REMINDER_OFF }
+        val reminder2 = reminders.getOrElse(1) { REMINDER_OFF }
+        val reminder3 = reminders.getOrElse(2) { REMINDER_OFF }
+
+        config.apply {
+            if (usePreviousEventReminders) {
+                lastEventReminderMinutes = reminder1
+                lastEventReminderMinutes2 = reminder2
+                lastEventReminderMinutes3 = reminder3
+            }
+        }
+
         mEvent.apply {
             startTS = newStartTS
             endTS = newEndTS
             title = newTitle
             description = event_description.value
-            reminder1Minutes = reminders.elementAtOrElse(0) { REMINDER_OFF }
-            reminder2Minutes = reminders.elementAtOrElse(1) { REMINDER_OFF }
-            reminder3Minutes = reminders.elementAtOrElse(2) { REMINDER_OFF }
+            reminder1Minutes = reminder1
+            reminder2Minutes = reminder2
+            reminder3Minutes = reminder3
             repeatInterval = mRepeatInterval
             importId = newImportId
-            flags = if (event_all_day.isChecked) (mEvent.flags or FLAG_ALL_DAY) else (mEvent.flags.removeFlag(FLAG_ALL_DAY))
+            flags = if (event_all_day.isChecked) (mEvent.flags.addBit(FLAG_ALL_DAY)) else (mEvent.flags.removeBit(FLAG_ALL_DAY))
             repeatLimit = if (repeatInterval == 0) 0 else mRepeatLimit
             repeatRule = mRepeatRule
             eventType = newEventType
@@ -573,13 +754,11 @@ class EventActivity : SimpleActivity() {
 
     private fun storeEvent(wasRepeatable: Boolean) {
         if (mEvent.id == 0) {
-            dbHelper.insert(mEvent, true) {
+            dbHelper.insert(mEvent, true, this) {
                 if (DateTime.now().isAfter(mEventStartDateTime.millis)) {
-                    if (mEvent.getReminders().isNotEmpty()) {
+                    if (mEvent.repeatInterval == 0 && mEvent.getReminders().isNotEmpty()) {
                         notifyEvent(mEvent)
                     }
-                } else {
-                    toast(R.string.event_added)
                 }
 
                 finish()
@@ -588,30 +767,30 @@ class EventActivity : SimpleActivity() {
             if (mRepeatInterval > 0 && wasRepeatable) {
                 EditRepeatingEventDialog(this) {
                     if (it) {
-                        dbHelper.update(mEvent, true) {
-                            eventUpdated()
+                        dbHelper.update(mEvent, true, this) {
+                            finish()
                         }
                     } else {
-                        dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS)
-                        mEvent.parentId = mEvent.id
-                        mEvent.id = 0
-                        dbHelper.insert(mEvent, true) {
-                            toast(R.string.event_updated)
+                        dbHelper.addEventRepeatException(mEvent.id, mEventOccurrenceTS, true)
+                        mEvent.apply {
+                            parentId = id
+                            id = 0
+                            repeatRule = 0
+                            repeatInterval = 0
+                            repeatLimit = 0
+                        }
+
+                        dbHelper.insert(mEvent, true, this) {
                             finish()
                         }
                     }
                 }
             } else {
-                dbHelper.update(mEvent, true) {
-                    eventUpdated()
+                dbHelper.update(mEvent, true, this) {
+                    finish()
                 }
             }
         }
-    }
-
-    private fun eventUpdated() {
-        toast(R.string.event_updated)
-        finish()
     }
 
     private fun updateStartTexts() {
@@ -650,6 +829,33 @@ class EventActivity : SimpleActivity() {
         event_end_time.setTextColor(textColor)
     }
 
+    private fun showOnMap() {
+        if (event_location.value.isEmpty()) {
+            toast(R.string.please_fill_location)
+            return
+        }
+
+        val pattern = Pattern.compile(LAT_LON_PATTERN)
+        val locationValue = event_location.value
+        val uri = if (pattern.matcher(locationValue).find()) {
+            val delimiter = if (locationValue.contains(';')) ";" else ","
+            val parts = locationValue.split(delimiter)
+            val latitude = parts.first()
+            val longitude = parts.last()
+            Uri.parse("geo:$latitude,$longitude")
+        } else {
+            val location = Uri.encode(locationValue)
+            Uri.parse("geo:0,0?q=$location")
+        }
+
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        if (intent.resolveActivity(packageManager) != null) {
+            startActivity(intent)
+        } else {
+            toast(R.string.no_app_found)
+        }
+    }
+
     @SuppressLint("NewApi")
     private fun setupStartDate() {
         hideKeyboard()
@@ -666,7 +872,7 @@ class EventActivity : SimpleActivity() {
 
     private fun setupStartTime() {
         hideKeyboard()
-        TimePickerDialog(this, mDialogTheme, startTimeSetListener, mEventStartDateTime.hourOfDay, mEventStartDateTime.minuteOfHour, config.use24hourFormat).show()
+        TimePickerDialog(this, mDialogTheme, startTimeSetListener, mEventStartDateTime.hourOfDay, mEventStartDateTime.minuteOfHour, config.use24HourFormat).show()
     }
 
     @SuppressLint("NewApi")
@@ -684,7 +890,7 @@ class EventActivity : SimpleActivity() {
 
     private fun setupEndTime() {
         hideKeyboard()
-        TimePickerDialog(this, mDialogTheme, endTimeSetListener, mEventEndDateTime.hourOfDay, mEventEndDateTime.minuteOfHour, config.use24hourFormat).show()
+        TimePickerDialog(this, mDialogTheme, endTimeSetListener, mEventEndDateTime.hourOfDay, mEventEndDateTime.minuteOfHour, config.use24HourFormat).show()
     }
 
     private val startDateSetListener = DatePickerDialog.OnDateSetListener { view, year, monthOfYear, dayOfMonth ->
@@ -733,12 +939,13 @@ class EventActivity : SimpleActivity() {
     private fun checkRepeatRule() {
         if (mRepeatInterval.isXWeeklyRepetition()) {
             val day = mRepeatRule
-            if (day == MONDAY || day == TUESDAY || day == WEDNESDAY || day == THURSDAY || day == FRIDAY || day == SATURDAY || day == SUNDAY) {
+            if (day == MONDAY_BIT || day == TUESDAY_BIT || day == WEDNESDAY_BIT || day == THURSDAY_BIT || day == FRIDAY_BIT || day == SATURDAY_BIT || day == SUNDAY_BIT) {
                 setRepeatRule(Math.pow(2.0, (mEventStartDateTime.dayOfWeek - 1).toDouble()).toInt())
             }
-        } else if (mRepeatInterval.isXMonthlyRepetition()) {
-            if (mRepeatRule == REPEAT_MONTH_LAST_DAY && !isLastDayOfTheMonth())
-                mRepeatRule = REPEAT_MONTH_SAME_DAY
+        } else if (mRepeatInterval.isXMonthlyRepetition() || mRepeatInterval.isXYearlyRepetition()) {
+            if (mRepeatRule == REPEAT_LAST_DAY && !isLastDayOfTheMonth()) {
+                mRepeatRule = REPEAT_SAME_DAY
+            }
             checkRepetitionRuleText()
         }
     }
@@ -750,5 +957,6 @@ class EventActivity : SimpleActivity() {
         event_reminder_image.applyColorFilter(textColor)
         event_type_image.applyColorFilter(textColor)
         event_caldav_calendar_image.applyColorFilter(textColor)
+        event_show_on_map.applyColorFilter(getAdjustedPrimaryColor())
     }
 }

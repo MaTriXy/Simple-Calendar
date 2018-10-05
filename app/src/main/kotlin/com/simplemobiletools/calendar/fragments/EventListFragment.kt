@@ -1,100 +1,131 @@
 package com.simplemobiletools.calendar.fragments
 
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.support.v4.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.simplemobiletools.calendar.R
 import com.simplemobiletools.calendar.activities.EventActivity
+import com.simplemobiletools.calendar.activities.MainActivity
 import com.simplemobiletools.calendar.activities.SimpleActivity
 import com.simplemobiletools.calendar.adapters.EventListAdapter
-import com.simplemobiletools.calendar.extensions.config
-import com.simplemobiletools.calendar.extensions.dbHelper
-import com.simplemobiletools.calendar.extensions.getFilteredEvents
-import com.simplemobiletools.calendar.extensions.seconds
+import com.simplemobiletools.calendar.extensions.*
 import com.simplemobiletools.calendar.helpers.EVENT_ID
 import com.simplemobiletools.calendar.helpers.EVENT_OCCURRENCE_TS
 import com.simplemobiletools.calendar.helpers.Formatter
-import com.simplemobiletools.calendar.interfaces.DeleteEventsListener
 import com.simplemobiletools.calendar.models.Event
 import com.simplemobiletools.calendar.models.ListEvent
-import com.simplemobiletools.calendar.models.ListItem
-import com.simplemobiletools.calendar.models.ListSection
-import com.simplemobiletools.commons.extensions.beGoneIf
-import com.simplemobiletools.commons.extensions.beVisibleIf
+import com.simplemobiletools.commons.extensions.*
+import com.simplemobiletools.commons.helpers.MONTH_SECONDS
+import com.simplemobiletools.commons.interfaces.RefreshRecyclerViewListener
+import com.simplemobiletools.commons.views.MyRecyclerView
 import kotlinx.android.synthetic.main.fragment_event_list.view.*
 import org.joda.time.DateTime
 import java.util.*
 
-class EventListFragment : Fragment(), DeleteEventsListener {
-    private var mEvents: List<Event> = ArrayList()
-    private var prevEventsHash = 0
-    private var lastHash = 0
+class EventListFragment : MyFragmentHolder(), RefreshRecyclerViewListener {
+    private var FETCH_INTERVAL = 6 * MONTH_SECONDS
+    private var MIN_EVENTS_TRESHOLD = 30
+
+    private var mEvents = ArrayList<Event>()
+    private var minFetchedTS = 0
+    private var maxFetchedTS = 0
+    private var wereInitialEventsAdded = false
+
+    private var use24HourFormat = false
+
     lateinit var mView: View
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         mView = inflater.inflate(R.layout.fragment_event_list, container, false)
-        val placeholderText = String.format(getString(R.string.two_string_placeholder), "${getString(R.string.no_upcoming_events)}\n", getString(R.string.add_some_events))
-        mView.calendar_empty_list_placeholder.text = placeholderText
+        mView.background = ColorDrawable(context!!.config.backgroundColor)
+        mView.calendar_events_list_holder?.id = (System.currentTimeMillis() % 100000).toInt()
+        mView.calendar_empty_list_placeholder_2.apply {
+            setTextColor(context.getAdjustedPrimaryColor())
+            underlineText()
+            setOnClickListener {
+                context.launchNewEventIntent(getNewEventDayCode())
+            }
+        }
+
+        use24HourFormat = context!!.config.use24HourFormat
+        updateActionBarTitle()
         return mView
     }
 
     override fun onResume() {
         super.onResume()
         checkEvents()
+        val use24Hour = context!!.config.use24HourFormat
+        if (use24Hour != use24HourFormat) {
+            use24HourFormat = use24Hour
+            (mView.calendar_events_list.adapter as? EventListAdapter)?.toggle24HourFormat(use24HourFormat)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        use24HourFormat = context!!.config.use24HourFormat
     }
 
     private fun checkEvents() {
-        val fromTS = DateTime().seconds() - context!!.config.displayPastEvents * 60
-        val toTS = DateTime().plusYears(1).seconds()
-        context!!.dbHelper.getEvents(fromTS, toTS) {
-            receivedEvents(it)
+        if (!wereInitialEventsAdded) {
+            minFetchedTS = DateTime().minusMonths(3).seconds()
+            maxFetchedTS = DateTime().plusMonths(6).seconds()
+        }
+
+        context!!.dbHelper.getEvents(minFetchedTS, maxFetchedTS) {
+            if (it.size >= MIN_EVENTS_TRESHOLD) {
+                receivedEvents(it, false)
+            } else {
+                if (!wereInitialEventsAdded) {
+                    minFetchedTS -= FETCH_INTERVAL
+                    maxFetchedTS += FETCH_INTERVAL
+                }
+                context!!.dbHelper.getEvents(minFetchedTS, maxFetchedTS) {
+                    mEvents = it
+                    receivedEvents(mEvents, false, !wereInitialEventsAdded)
+                }
+            }
+            wereInitialEventsAdded = true
         }
     }
 
-    private fun receivedEvents(events: MutableList<Event>) {
-        if (context == null || activity == null)
-            return
-
-        val newHash = events.hashCode()
-        if (newHash == lastHash) {
+    private fun receivedEvents(events: ArrayList<Event>, scrollAfterUpdating: Boolean, forceRecreation: Boolean = false) {
+        if (context == null || activity == null) {
             return
         }
-        lastHash = newHash
 
-        val filtered = context!!.getFilteredEvents(events)
-        val hash = filtered.hashCode()
-        if (prevEventsHash == hash)
-            return
-
-        prevEventsHash = hash
-        mEvents = filtered
-        val listItems = ArrayList<ListItem>(mEvents.size)
-        val replaceDescription = context!!.config.replaceDescription
-        val sorted = mEvents.sortedWith(compareBy({ it.startTS }, { it.endTS }, { it.title }, { if (replaceDescription) it.location else it.description }))
-        val sublist = sorted.subList(0, Math.min(sorted.size, 100))
-        var prevCode = ""
-        sublist.forEach {
-            val code = Formatter.getDayCodeFromTS(it.startTS)
-            if (code != prevCode) {
-                val day = Formatter.getDayTitle(context!!, code)
-                listItems.add(ListSection(day))
-                prevCode = code
-            }
-            listItems.add(ListEvent(it.id, it.startTS, it.endTS, it.title, it.description, it.getIsAllDay(), it.color, it.location))
-        }
-
-        val eventsAdapter = EventListAdapter(activity as SimpleActivity, listItems, true, this, mView.calendar_events_list) {
-            if (it is ListEvent) {
-                editEvent(it)
-            }
-        }
+        mEvents = context!!.getFilteredEvents(events)
+        val listItems = context!!.getEventListItems(mEvents)
 
         activity?.runOnUiThread {
-            mView.calendar_events_list.apply {
-                this@apply.adapter = eventsAdapter
+            val currAdapter = mView.calendar_events_list.adapter
+            if (currAdapter == null || forceRecreation) {
+                EventListAdapter(activity as SimpleActivity, listItems, true, this, mView.calendar_events_list) {
+                    if (it is ListEvent) {
+                        editEvent(it)
+                    }
+                }.apply {
+                    mView.calendar_events_list.adapter = this
+                }
+
+                mView.calendar_events_list.endlessScrollListener = object : MyRecyclerView.EndlessScrollListener {
+                    override fun updateTop() {
+                        fetchPreviousPeriod()
+                    }
+
+                    override fun updateBottom() {
+                        fetchNextPeriod(true)
+                    }
+                }
+            } else {
+                (currAdapter as EventListAdapter).updateListItems(listItems)
+                if (scrollAfterUpdating) {
+                    mView.calendar_events_list.smoothScrollBy(0, context!!.resources.getDimension(R.dimen.endless_scroll_move_height).toInt())
+                }
             }
             checkPlaceholderVisibility()
         }
@@ -102,6 +133,7 @@ class EventListFragment : Fragment(), DeleteEventsListener {
 
     private fun checkPlaceholderVisibility() {
         mView.calendar_empty_list_placeholder.beVisibleIf(mEvents.isEmpty())
+        mView.calendar_empty_list_placeholder_2.beVisibleIf(mEvents.isEmpty())
         mView.calendar_events_list.beGoneIf(mEvents.isEmpty())
         if (activity != null)
             mView.calendar_empty_list_placeholder.setTextColor(activity!!.config.textColor)
@@ -115,16 +147,40 @@ class EventListFragment : Fragment(), DeleteEventsListener {
         }
     }
 
-    override fun deleteItems(ids: ArrayList<Int>) {
-        val eventIDs = Array(ids.size, { i -> (ids[i].toString()) })
-        context!!.dbHelper.deleteEvents(eventIDs, true)
+    private fun fetchPreviousPeriod() {
+        val oldMinFetchedTS = minFetchedTS - 1
+        minFetchedTS -= FETCH_INTERVAL
+        context!!.dbHelper.getEvents(minFetchedTS, oldMinFetchedTS) {
+            mEvents.addAll(0, it)
+            receivedEvents(mEvents, false)
+        }
+    }
+
+    private fun fetchNextPeriod(scrollAfterUpdating: Boolean) {
+        val oldMaxFetchedTS = maxFetchedTS + 1
+        maxFetchedTS += FETCH_INTERVAL
+        context!!.dbHelper.getEvents(oldMaxFetchedTS, maxFetchedTS) {
+            mEvents.addAll(it)
+            receivedEvents(mEvents, scrollAfterUpdating)
+        }
+    }
+
+    override fun refreshItems() {
         checkEvents()
     }
 
-    override fun addEventRepeatException(parentIds: ArrayList<Int>, timestamps: ArrayList<Int>) {
-        parentIds.forEachIndexed { index, value ->
-            context!!.dbHelper.addEventRepeatException(value, timestamps[index])
-        }
+    override fun goToToday() {
+    }
+
+    override fun refreshEvents() {
         checkEvents()
     }
+
+    override fun shouldGoToTodayBeVisible() = false
+
+    override fun updateActionBarTitle() {
+        (activity as? MainActivity)?.updateActionBarTitle(getString(R.string.app_launcher_name))
+    }
+
+    override fun getNewEventDayCode() = Formatter.getTodayCode()
 }

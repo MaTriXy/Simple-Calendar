@@ -14,14 +14,14 @@
 
         <com.simplemobiletools.commons.views.MyEditText
             android:id="@+id/event_title"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginLeft="@dimen/activity_margin"
             android:layout_marginRight="@dimen/activity_margin"
             android:layout_marginTop="@dimen/activity_margin"
             android:hint="@string/title"
             android:inputType="textCapSentences"
-            android:maxLength="80"
+            android:maxLength="180"
             android:maxLines="1"
             android:minEms="20"
             android:textCursorDrawable="@null"
@@ -29,23 +29,38 @@
 
         <com.simplemobiletools.commons.views.MyEditText
             android:id="@+id/event_location"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/event_title"
             android:layout_marginLeft="@dimen/activity_margin"
-            android:layout_marginRight="@dimen/activity_margin"
             android:layout_marginTop="@dimen/activity_margin"
+            android:layout_toLeftOf="@+id/event_show_on_map"
             android:hint="@string/location"
             android:inputType="textCapWords"
-            android:maxLength="80"
+            android:maxLength="180"
             android:maxLines="1"
             android:minEms="20"
             android:textCursorDrawable="@null"
             android:textSize="@dimen/day_text_size"/>
 
+        <ImageView
+            android:id="@+id/event_show_on_map"
+            style="@style/MyBorderlessBackgroundStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_alignBottom="@+id/event_location"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentRight="true"
+            android:layout_alignTop="@+id/event_location"
+            android:layout_marginEnd="@dimen/activity_margin"
+            android:layout_marginRight="@dimen/activity_margin"
+            android:paddingLeft="@dimen/small_margin"
+            android:paddingRight="@dimen/small_margin"
+            android:src="@drawable/ic_place"/>
+
         <com.simplemobiletools.commons.views.MyEditText
             android:id="@+id/event_description"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/event_location"
             android:layout_marginLeft="@dimen/activity_margin"
@@ -67,7 +82,7 @@
             android:layout_below="@+id/event_description"
             android:layout_marginBottom="@dimen/normal_margin"
             android:layout_marginTop="@dimen/activity_margin"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"/>
 
         <ImageView
@@ -163,7 +178,7 @@
             android:layout_below="@+id/event_end_date"
             android:layout_marginBottom="@dimen/medium_margin"
             android:layout_marginTop="@dimen/medium_margin"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"/>
 
         <ImageView
@@ -230,7 +245,7 @@
             android:layout_below="@+id/event_reminder_3"
             android:layout_marginBottom="@dimen/medium_margin"
             android:layout_marginTop="@dimen/medium_margin"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"/>
 
         <ImageView
@@ -289,9 +304,7 @@
                 android:layout_toEndOf="@+id/event_repetition_rule_label"
                 android:layout_toRightOf="@+id/event_repetition_rule_label"
                 android:clickable="false"
-                android:ellipsize="end"
                 android:gravity="end"
-                android:lines="1"
                 android:padding="@dimen/activity_margin"
                 android:text="@string/every_day"
                 android:textSize="@dimen/day_text_size"/>
@@ -337,7 +350,7 @@
             android:layout_height="1px"
             android:layout_below="@+id/event_repetition_limit_holder"
             android:layout_marginTop="@dimen/medium_margin"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"/>
 
         <ImageView
@@ -359,8 +372,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_below="@+id/event_repetition_divider"
-            android:layout_marginBottom="@dimen/medium_margin"
-            android:layout_marginTop="@dimen/medium_margin"
             android:layout_toEndOf="@+id/event_caldav_calendar_image"
             android:layout_toRightOf="@+id/event_caldav_calendar_image"
             android:background="?attr/selectableItemBackground"
@@ -399,7 +410,7 @@
             android:layout_width="match_parent"
             android:layout_height="1px"
             android:layout_below="@+id/event_caldav_calendar_holder"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"
             android:visibility="gone"/>
 
@@ -457,7 +468,7 @@
             android:layout_height="1px"
             android:layout_below="@+id/event_type_holder"
             android:layout_marginTop="@dimen/medium_margin"
-            android:background="@color/darker_divider"
+            android:background="@color/divider_grey"
             android:importantForAccessibility="no"/>
     </RelativeLayout>
 </ScrollView>

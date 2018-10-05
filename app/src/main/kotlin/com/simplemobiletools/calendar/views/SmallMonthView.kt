@@ -11,8 +11,10 @@ import com.simplemobiletools.calendar.extensions.config
 import com.simplemobiletools.calendar.helpers.MEDIUM_ALPHA
 import com.simplemobiletools.calendar.models.DayYearly
 import com.simplemobiletools.commons.extensions.adjustAlpha
+import com.simplemobiletools.commons.extensions.getAdjustedPrimaryColor
 import java.util.*
 
+// used for displaying months at Yearly view
 class SmallMonthView(context: Context, attrs: AttributeSet, defStyle: Int) : View(context, attrs, defStyle) {
     private var paint: Paint
     private var todayCirclePaint: Paint
@@ -59,7 +61,7 @@ class SmallMonthView(context: Context, attrs: AttributeSet, defStyle: Int) : Vie
         }
 
         todayCirclePaint = Paint(paint)
-        todayCirclePaint.color = context.config.primaryColor.adjustAlpha(MEDIUM_ALPHA)
+        todayCirclePaint.color = context.getAdjustedPrimaryColor().adjustAlpha(MEDIUM_ALPHA)
         isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
 

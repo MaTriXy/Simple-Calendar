@@ -23,6 +23,7 @@ import com.simplemobiletools.commons.dialogs.ColorPickerDialog
 import com.simplemobiletools.commons.extensions.adjustAlpha
 import com.simplemobiletools.commons.extensions.applyColorFilter
 import com.simplemobiletools.commons.extensions.beVisible
+import com.simplemobiletools.commons.extensions.setFillWithStroke
 import kotlinx.android.synthetic.main.first_row.*
 import kotlinx.android.synthetic.main.top_navigation.*
 import kotlinx.android.synthetic.main.widget_config_monthly.*
@@ -88,7 +89,7 @@ class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
         config_bg_seekbar.progress = (mBgAlpha * 100).toInt()
         updateBgColor()
 
-        MonthlyCalendarImpl(this, applicationContext).updateMonthlyCalendar(DateTime(), false)
+        MonthlyCalendarImpl(this, applicationContext).updateMonthlyCalendar(DateTime().withDayOfMonth(1), false)
     }
 
     private fun saveConfig() {
@@ -110,17 +111,21 @@ class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
     }
 
     private fun pickBackgroundColor() {
-        ColorPickerDialog(this, mBgColorWithoutTransparency) {
-            mBgColorWithoutTransparency = it
-            updateBgColor()
+        ColorPickerDialog(this, mBgColorWithoutTransparency) { wasPositivePressed, color ->
+            if (wasPositivePressed) {
+                mBgColorWithoutTransparency = color
+                updateBgColor()
+            }
         }
     }
 
     private fun pickTextColor() {
-        ColorPickerDialog(this, mTextColor) {
-            mTextColorWithoutTransparency = it
-            updateColors()
-            updateDays()
+        ColorPickerDialog(this, mTextColor) { wasPositivePressed, color ->
+            if (wasPositivePressed) {
+                mTextColorWithoutTransparency = color
+                updateColors()
+                updateDays()
+            }
         }
     }
 
@@ -139,7 +144,7 @@ class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
         top_left_arrow.applyColorFilter(mTextColor)
         top_right_arrow.applyColorFilter(mTextColor)
         top_value.setTextColor(mTextColor)
-        config_text_color.setBackgroundColor(mTextColor)
+        config_text_color.setFillWithStroke(mTextColor, Color.BLACK)
         config_save.setTextColor(mTextColor)
         updateLabels()
     }
@@ -147,14 +152,14 @@ class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
     private fun updateBgColor() {
         mBgColor = mBgColorWithoutTransparency.adjustAlpha(mBgAlpha)
         config_calendar.setBackgroundColor(mBgColor)
-        config_bg_color.setBackgroundColor(mBgColor)
+        config_bg_color.setFillWithStroke(mBgColor, Color.BLACK)
         config_save.setBackgroundColor(mBgColor)
     }
 
     private fun updateDays() {
         val len = mDays!!.size
 
-        if (applicationContext.config.displayWeekNumbers) {
+        if (applicationContext.config.showWeekNumbers) {
             week_num.setTextColor(mTextColor)
             week_num.beVisible()
 
@@ -194,7 +199,7 @@ class WidgetMonthlyConfigureActivity : SimpleActivity(), MonthlyCalendar {
         }
     }
 
-    override fun updateMonthlyCalendar(context: Context, month: String, days: List<DayMonthly>, checkedEvents: Boolean) {
+    override fun updateMonthlyCalendar(context: Context, month: String, days: ArrayList<DayMonthly>, checkedEvents: Boolean, currTargetDate: DateTime) {
         runOnUiThread {
             mDays = days
             top_value.text = month

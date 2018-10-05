@@ -1,6 +1,184 @@
 Changelog
 ==========
 
+Version 4.2.1 *(2018-09-22)*
+----------------------------
+
+ * Fixed some crashes related to specific invalid times in some timezones
+ * Added some holidays in Malaysia and Australia by youdly
+ * Added a new warning if the app notifications are disabled by the system
+ * Some other translation improvements and bugfixes
+
+Version 4.2.0 *(2018-09-10)*
+----------------------------
+
+ * Replaced colored event type dots with bars for better visibility
+ * Fixed some wrong reminder date data
+ * Properly highlight running all-day events
+ * Fix a glitch with CalDAV events being saved in the wrong calendar
+ * Couple other smaller UX and translation improvements
+
+Version 4.1.3 *(2018-08-06)*
+----------------------------
+
+ * Added a Go To Today button at the monthly widget
+ * Increase the allowed length of event titles, locations, descriptions
+ * Couple other stability and UX improvements
+
+Version 4.1.2 *(2018-07-14)*
+----------------------------
+
+ * Made reminder sounds more reliable on Android Oreo
+ * Properly fetch running events at reboot, notify only if needed
+ * Couple UX and stability improvements
+
+Version 4.1.1 *(2018-07-04)*
+----------------------------
+
+ * Allow customizing the audio stream used by reminders
+ * Show the time remaining till the reminder appears
+ * Couple other UX and stability improvements
+
+Version 4.1.0 *(2018-06-13)*
+----------------------------
+
+ * Make reminders on Android Oreo more reliable
+ * Allow deleting only future occurrences of repeating events
+ * Fixed some visual glitches at the weekly view
+ * Multiple CalDAV event related improvements
+
+Version 4.0.4 *(2018-05-27)*
+----------------------------
+
+ * Make sure the alarm rings properly at DND mode
+ * Improved the UK holidays and added Singapore ones
+ * Make Event list items more compact when possible
+ * Couple other UX improvements and bugfixes
+
+Version 4.0.3 *(2018-05-15)*
+----------------------------
+
+ * Fixing some widget related crashes
+
+Version 4.0.2 *(2018-05-14)*
+----------------------------
+
+ * Make sure we store the proper calendar ID at events
+
+Version 4.0.1 *(2018-05-14)*
+----------------------------
+
+ * Fix app not opening at clicking widgets
+ * Couple stability improvements
+
+Version 4.0.0 *(2018-05-10)*
+----------------------------
+
+ * Allow changing the app launcher color
+ * Allow setting reminder looping till dismissed
+ * Added a button in Settings for changing widget colors without recreating them
+ * Added optional dimming of past events
+ * Make Event List view an endless scrollview
+ * Added some more advanced yearly repetition rules
+ * Improved some country holidays
+ * Many CalDAV related improvements
+ * Many other smaller bugfixes and performance/UX improvements
+
+Version 3.4.2 *(2018-04-13)*
+----------------------------
+
+ * Hide public notification content if desired so (by fraang)
+ * Added optional grid on the monthly view
+ * Allow exporting events on SD cards
+ * Allow selecting No Sound as a reminder sound
+ * Set default event status for CalDAV events as Confirmed
+
+Version 3.4.1 *(2018-03-30)*
+----------------------------
+
+ * Reworked custom notification sound, should be more reliable
+ * Fixed some glitches related to the monthly view
+ * Misc smaller bugfixes and stability improvements
+
+Version 3.4.0 *(2018-02-28)*
+----------------------------
+
+ * Rewrote the monthly view
+ * Improved the performance at importing events from ics files
+ * Added many new country holidays
+ * Handle some new third party intents
+
+Version 3.3.2 *(2018-02-21)*
+----------------------------
+
+ * Try fixing the off-by-one issue at CalDAV syncing all-day events
+ * Couple stability improvements
+
+Version 3.3.1 *(2018-02-19)*
+----------------------------
+
+ * Improved CalDAV all-day event importing (by angelsl)
+ * Added a FAQ section with a couple initial items
+ * Once again fixed some cases of blank or duplicate views
+
+Version 3.3.0 *(2018-02-10)*
+----------------------------
+
+ * Fixed blank or duplicate views in some cases (yes, again)
+ * Fixed off-by-one day error at syncing all-day events via Nextcloud
+ * Make default filenames at export more user-friendly
+ * Improved the performance by removing some unnecessary redraws
+ * Added a toggle for switching between default snooze interval or always showing an interval picker
+
+Version 3.2.4 *(2018-02-05)*
+----------------------------
+
+ * Fixed blank screens in some cases
+ * Misc smaller improvements
+
+Version 3.2.3 *(2018-02-01)*
+----------------------------
+
+ * Fixed blank screens in some cases
+ * Make sure the Add New Event button works when opening the app from a widget
+ * Removed the "Default event reminder" from settings, remember last used values
+ * Allow selecting Snooze interval at pressing Snooze
+ * Allow disabling displaying of What's New
+ * Add a Back button at the actionmenu when opening a subview
+ * Allow deleting all events at once without reseting event types and other settings
+
+Version 3.2.2 *(2018-01-27)*
+----------------------------
+
+ * Fixed some cases of reminders not triggering
+ * Properly handle importing events with multiple lines long description
+ * Properly show the New Event button whenever appropriate
+
+Version 3.2.1 *(2018-01-22)*
+----------------------------
+
+ * Misc minor fixes
+
+Version 3.2.0 *(2018-01-22)*
+----------------------------
+
+ * Added an initial implementation of Search
+ * Fixed an off-by-one issue at syncing all-day CalDAV events
+ * Added a Daily View
+ * Allow importing events from .ics files directly in a CalDAV account
+ * Try parsing latitude and longitude coordinates from the Location field
+
+Version 3.1.0 *(2018-01-11)*
+----------------------------
+
+ * Made some CalDAV sync improvements, especially related to repeatable event exceptions
+ * Added a Map button to event location, to display the location in a third party map
+ * Handle INSERT and EDIT intent
+ * Made Dark theme the default
+ * Updated both event list and monthly widget, hopelly making them more reliable
+ * Added holidays in Australia
+ * Hopefully fixed the off-by-one error at importing/syncing all-day events/holidays
+
 Version 3.0.1 *(2017-12-06)*
 ----------------------------
 
